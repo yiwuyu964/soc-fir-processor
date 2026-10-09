@@ -76,7 +76,7 @@ module cmsdk_axi_ram_beh #(
     reg [3:0]               RF_WSTB;              	// 写字节选通
     wire                    RF_WSEQ;            	// 顺序写
     reg  [AW-1:0]	    	RF_WADDR;               // Address phase write address
-    wire [31:0]	    	    RF_WDATA;               // Data phase write data
+    reg  [31:0]	    	    RF_WDATA;               // Data phase write data（改为寄存，修 bug）
     wire                    RF_RAREQ;           	// Address phase read valid
     wire                    RF_RREQ;            	// Data phase read enable
     wire                    RF_RACK;            	// Data phase read ack
@@ -296,7 +296,16 @@ module cmsdk_axi_ram_beh #(
 		end
 	end
 
-	assign RF_WDATA = W_DATA;						// 采样写数据
+	// 修 bug：原来 `assign RF_WDATA = W_DATA;` 是组合直通，但下面的 RAM 写入
+	// 发生在 RF_WREQ（= W_VALID & W_READY 延迟一拍）之后，导致采样到的 W_DATA
+	// 是"下一拍"已经变掉的旧数据（所以循环计数器 i++ 写回去的值不对）。
+	// 改成在握手那一拍把 W_DATA 寄存下来，保证写进 RAM 的数据就是握手时的数据。
+	always @(posedge ACLK or negedge ARESETn) begin
+		if(!ARESETn)
+			RF_WDATA <= 32'h0;
+		else if(W_VALID & W_READY)
+			RF_WDATA <= W_DATA;
+	end
 
     //  Wait state generate treat access as sequential if AW_LEN > 0, 
     //  or access address is in the same word, or if the access is in the next word
