@@ -35,7 +35,7 @@ $dir  = Join-Path $root $Lab
 
 if (-not (Test-Path $dir)) {
     Write-Host "找不到实验目录: $dir" -ForegroundColor Red
-    Write-Host "可用的实验: 01_counter 02_delayline 03_mac 04_fir9 05_fir81 06_axi_lite 07_fir_axi 08_soc 09_soc_cm0 10_dma" -ForegroundColor Yellow
+    Write-Host "可用的实验: 01_counter 02_delayline 03_mac 04_fir9 05_fir81 06_axi_lite 07_fir_axi 08_soc 09_soc_cm0 10_dma 11_axi_apb" -ForegroundColor Yellow
     exit 1
 }
 
@@ -53,6 +53,7 @@ switch ($Lab) {
                      $src = @("cpu\cortexm0ds\cortexm0ds.v","cpu\cortexm0ds\cortexm0ds_logic.v","cpu\cortexm0ds\ahb2axi4_if.v","cpu\cortexm0ds\ahb2axi4_ahb.v","cpu\cortexm0ds\ahb2axi4_axi.v","cpu\cortexm0ds\ahb2axi4_burst.v","cpu\cortexm0ds\ahb2axi4_fifo.v","cpu\cortexm0ds\ahb_axi_define.v","cpu\cmsdk_axi_ram_beh.v","rtl\axi4_to_axilite.v","rtl\fir_axi.v","rtl\fir_cfg.v","rtl\sync_fifo.v","rtl\uart_axi.v","rtl\uart_tx.v","rtl\soc_cm0_top.v","09_soc_cm0\tb_soc_cm0.v")
                      $inc = @("cpu\cortexm0ds") }
     "10_dma"       { $top = "tb_dma";        $src = @("rtl\dma.v", "10_dma\tb_dma.v") }
+    "11_axi_apb"   { $top = "tb_axi_to_apb"; $src = @("rtl\axi_to_apb.v", "11_axi_apb\tb_axi_to_apb.v") }
     default        { Write-Host "未知实验: $Lab" -ForegroundColor Red; exit 1 }
 }
 
