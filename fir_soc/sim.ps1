@@ -35,7 +35,7 @@ $dir  = Join-Path $root $Lab
 
 if (-not (Test-Path $dir)) {
     Write-Host "找不到实验目录: $dir" -ForegroundColor Red
-    Write-Host "可用的实验: 01_counter 02_delayline 03_mac 04_fir9 05_fir81 06_axi_lite 07_fir_axi 08_soc 09_soc_cm0 10_dma 11_axi_apb" -ForegroundColor Yellow
+    Write-Host "可用的实验: 01_counter 02_delayline 03_mac 04_fir9 05_fir81 06_axi_lite 07_fir_axi 08_soc 09_soc_cm0 10_dma 11_axi_apb 12_uart_echo" -ForegroundColor Yellow
     exit 1
 }
 
@@ -54,6 +54,7 @@ switch ($Lab) {
                      $inc = @("cpu\cortexm0ds") }
     "10_dma"       { $top = "tb_dma";        $src = @("rtl\dma.v", "10_dma\tb_dma.v") }
     "11_axi_apb"   { $top = "tb_axi_to_apb"; $src = @("rtl\axi_to_apb.v", "11_axi_apb\tb_axi_to_apb.v") }
+    "12_uart_echo" { $top = "tb_uart_echo";  $src = @("rtl\axi_to_apb.v", "rtl\uart_tx.v", "rtl\uart_rx.v", "rtl\uart_apb.v", "rtl\sync_fifo.v", "12_uart_echo\tb_uart_echo.v") }
     default        { Write-Host "未知实验: $Lab" -ForegroundColor Red; exit 1 }
 }
 
