@@ -21,6 +21,181 @@
 // ============================================================
 `timescale 1ns/1ps
 
+// ------------------------------------------------------------
+// AXI4 从设备模型：字节可寻址存储器 + 可注入 SLVERR
+// ------------------------------------------------------------
+module axi_slave_model #(
+    parameter ADDR_W = 32,
+    parameter DATA_W = 32,
+    parameter ID_W   = 4,
+    parameter MEM_BYTES = 2048
+)(
+    input  wire                 clk,
+    input  wire                 rst_n,
+    // 写地址
+    input  wire [ID_W-1:0]      awid,
+    input  wire [ADDR_W-1:0]    awaddr,
+    input  wire [7:0]           awlen,
+    input  wire [2:0]           awsize,
+    input  wire [1:0]           awburst,
+    input  wire                 awvalid,
+    output wire                 awready,
+    // 写数据
+    input  wire [DATA_W-1:0]    wdata,
+    input  wire [DATA_W/8-1:0]  wstrb,
+    input  wire                 wlast,
+    input  wire                 wvalid,
+    output wire                 wready,
+    // 写响应
+    output wire [ID_W-1:0]      bid,
+    output wire [1:0]           bresp,
+    output wire                 bvalid,
+    input  wire                 bready,
+    // 读地址
+    input  wire [ID_W-1:0]      arid,
+    input  wire [ADDR_W-1:0]    araddr,
+    input  wire [7:0]           arlen,
+    input  wire [2:0]           arsize,
+    input  wire [1:0]           arburst,
+    input  wire                 arvalid,
+    output wire                 arready,
+    // 读数据
+    output wire [ID_W-1:0]      rid,
+    output wire [DATA_W-1:0]    rdata,
+    output wire [1:0]           rresp,
+    output wire                 rlast,
+    output wire                 rvalid,
+    input  wire                 rready,
+    // 错误注入：起始地址（字对齐）等于 err_addr 的事务返回 SLVERR
+    input  wire [ADDR_W-1:0]    err_addr
+);
+
+    reg [7:0] mem [0:MEM_BYTES-1];
+
+    // ---- 写侧 ----
+    localparam WS_IDLE = 2'd0, WS_W = 2'd1, WS_B = 2'd2;
+    reg [1:0]        ws_cur, ws_next;
+    reg [ID_W-1:0]   w_id;
+    reg [ADDR_W-1:0] w_addr;
+    reg [7:0]        w_beat;
+    reg [2:0]        w_size;
+    reg              w_err;
+
+    wire [ADDR_W-1:0] w_beat_addr = w_addr + ({{(ADDR_W-8){1'b0}}, w_beat} << w_size);
+    wire [ADDR_W-1:0] w_word_base = w_beat_addr & ~(ADDR_W'(4'd3));
+
+    wire aw_hs = awvalid && awready;
+    wire w_hs  = wvalid  && wready;
+    wire b_hs  = bvalid  && bready;
+
+    assign awready = (ws_cur == WS_IDLE);
+    assign wready  = (ws_cur == WS_W);
+    assign bvalid  = (ws_cur == WS_B);
+    assign bid     = w_id;
+    assign bresp   = w_err ? 2'b10 : 2'b00;
+
+    always @(*) begin
+        ws_next = ws_cur;
+        case (ws_cur)
+            WS_IDLE: if (aw_hs)          ws_next = WS_W;
+            WS_W   : if (w_hs && wlast)  ws_next = WS_B;
+            WS_B   : if (b_hs)           ws_next = WS_IDLE;
+            default:                     ws_next = WS_IDLE;
+        endcase
+    end
+
+    always @(posedge clk or negedge rst_n) begin
+        integer i;
+        if (!rst_n) begin
+            ws_cur <= WS_IDLE;
+            w_id <= 0; w_addr <= 0; w_beat <= 0; w_size <= 0; w_err <= 0;
+            for (i = 0; i < MEM_BYTES; i = i + 1) mem[i] <= 8'h00;
+        end
+        else begin
+            ws_cur <= ws_next;
+            case (ws_cur)
+                WS_IDLE: begin
+                    if (aw_hs) begin
+                        w_id   <= awid;
+                        w_addr <= awaddr;
+                        w_size <= awsize;
+                        w_err  <= (awaddr == err_addr);
+                        w_beat <= 8'd0;
+                    end
+                end
+                WS_W: begin
+                    if (w_hs) begin
+                        for (i = 0; i < DATA_W/8; i = i + 1) begin
+                            if (wstrb[i]) mem[w_word_base + i] <= wdata[8*i +: 8];
+                        end
+                        w_beat <= w_beat + 8'd1;
+                    end
+                end
+                default: ;
+            endcase
+        end
+    end
+
+    // ---- 读侧 ----
+    localparam RS_IDLE = 2'd0, RS_R = 2'd1;
+    reg [1:0]        rs_cur, rs_next;
+    reg [ID_W-1:0]   r_id;
+    reg [ADDR_W-1:0] r_addr;
+    reg [7:0]        r_beat, r_len;
+    reg [2:0]        r_size;
+    reg              r_err;
+
+    wire [ADDR_W-1:0] r_beat_addr = r_addr + ({{(ADDR_W-8){1'b0}}, r_beat} << r_size);
+    wire [ADDR_W-1:0] r_word_base = r_beat_addr & ~(ADDR_W'(4'd3));
+
+    wire ar_hs = arvalid && arready;
+    wire r_hs  = rvalid  && rready;
+
+    assign arready = (rs_cur == RS_IDLE);
+    assign rvalid  = (rs_cur == RS_R);
+    assign rid     = r_id;
+    assign rresp   = r_err ? 2'b10 : 2'b00;
+    assign rlast   = (r_beat == r_len);
+    assign rdata   = {mem[r_word_base+3], mem[r_word_base+2],
+                      mem[r_word_base+1], mem[r_word_base+0]};
+
+    always @(*) begin
+        rs_next = rs_cur;
+        case (rs_cur)
+            RS_IDLE: if (ar_hs)          rs_next = RS_R;
+            RS_R   : if (r_hs && rlast)  rs_next = RS_IDLE;
+            default:                     rs_next = RS_IDLE;
+        endcase
+    end
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            rs_cur <= RS_IDLE;
+            r_id <= 0; r_addr <= 0; r_beat <= 0; r_len <= 0; r_size <= 0; r_err <= 0;
+        end
+        else begin
+            rs_cur <= rs_next;
+            case (rs_cur)
+                RS_IDLE: begin
+                    if (ar_hs) begin
+                        r_id   <= arid;
+                        r_addr <= araddr;
+                        r_size <= arsize;
+                        r_len  <= arlen;
+                        r_err  <= (araddr == err_addr);
+                        r_beat <= 8'd0;
+                    end
+                end
+                RS_R: begin
+                    if (r_hs) r_beat <= r_beat + 8'd1;
+                end
+                default: ;
+            endcase
+        end
+    end
+
+endmodule
+
 
 // ------------------------------------------------------------
 // 顶层测试台
@@ -99,7 +274,7 @@ module tb_ahb2axi;
         .m_axi_rlast(m_rlast), .m_axi_rvalid(m_rvalid), .m_axi_rready(m_rready)
     );
 
-    axi_mem_model #(.ADDR_W(ADDR_W), .DATA_W(DATA_W), .ID_W(ID_W)) u_slave (
+    axi_slave_model #(.ADDR_W(ADDR_W), .DATA_W(DATA_W), .ID_W(ID_W)) u_slave (
         .clk(clk), .rst_n(rst_n),
         .awid(m_awid), .awaddr(m_awaddr), .awlen(m_awlen), .awsize(m_awsize),
         .awburst(m_awburst), .awvalid(m_awvalid), .awready(m_awready),

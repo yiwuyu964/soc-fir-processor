@@ -15,6 +15,88 @@
 `timescale 1ns/1ps
 
 // ============================================================
+// 从设备行为模型：单笔写/读，带内存，读回写进去的数据
+// ============================================================
+module axi_slave_model #(
+    parameter ID_W=4, DATA_W=32, ADDR_W=32
+)(
+    input clk, rst_n,
+    input  [ID_W-1:0] s_awid, input [ADDR_W-1:0] s_awaddr, input [7:0] s_awlen,
+    input  [2:0] s_awsize, input [1:0] s_awburst, input s_awvalid, output s_awready,
+    input  [DATA_W-1:0] s_wdata, input [3:0] s_wstrb, input s_wlast, input s_wvalid, output s_wready,
+    output [ID_W-1:0] s_bid, output [1:0] s_bresp, output s_bvalid, input s_bready,
+    input  [ID_W-1:0] s_arid, input [ADDR_W-1:0] s_araddr, input [7:0] s_arlen,
+    input  [2:0] s_arsize, input [1:0] s_arburst, input s_arvalid, output s_arready,
+    output [ID_W-1:0] s_rid, output [DATA_W-1:0] s_rdata, output [1:0] s_rresp,
+    output s_rlast, output s_rvalid, input s_rready
+);
+    reg [DATA_W-1:0] mem [0:255];
+    integer i;
+    initial for (i=0;i<256;i=i+1) mem[i] = 32'h0;
+
+    // ---- 写侧 ----
+    reg w_busy, bvalid;
+    reg [ID_W-1:0] w_id;
+    reg [7:0] w_beat, w_len;
+    reg [ADDR_W-1:0] w_addr;
+
+    assign s_awready = !w_busy;
+    assign s_wready  = w_busy;
+
+    wire w_last_beat = w_busy && s_wvalid && s_wready && (s_wlast || (w_beat == w_len));
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            w_busy <= 0; bvalid <= 0; w_beat <= 0;
+        end else begin
+            if (s_awvalid && s_awready) begin
+                w_busy <= 1; w_id <= s_awid; w_len <= s_awlen; w_addr <= s_awaddr; w_beat <= 0;
+            end
+            if (w_busy && s_wvalid && s_wready) begin
+                mem[w_addr[9:2]] <= s_wdata;
+                if (w_last_beat) w_busy <= 0;
+                else begin w_beat <= w_beat + 1; w_addr <= w_addr + 4; end
+            end
+            if (w_last_beat) bvalid <= 1;
+            else if (bvalid && s_bready) bvalid <= 0;
+        end
+    end
+
+    assign s_bid = w_id;
+    assign s_bresp = 2'b00;
+    assign s_bvalid = bvalid;
+
+    // ---- 读侧 ----
+    reg r_busy;
+    reg [ID_W-1:0] r_id;
+    reg [7:0] r_beat, r_len;
+    reg [ADDR_W-1:0] r_addr;
+
+    assign s_arready = !r_busy;
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            r_busy <= 0; r_beat <= 0;
+        end else begin
+            if (s_arvalid && s_arready) begin
+                r_busy <= 1; r_id <= s_arid; r_len <= s_arlen; r_addr <= s_araddr; r_beat <= 0;
+            end
+            if (r_busy && s_rvalid && s_rready) begin
+                if (s_rlast) r_busy <= 0;
+                else begin r_beat <= r_beat + 1; r_addr <= r_addr + 4; end
+            end
+        end
+    end
+
+    assign s_rid = r_id;
+    assign s_rdata = mem[r_addr[9:2]];
+    assign s_rresp = 2'b00;
+    assign s_rlast = (r_beat == r_len);
+    assign s_rvalid = r_busy;
+
+endmodule
+
+// ============================================================
 // 测试台
 // ============================================================
 module tb_axi_ic;
@@ -112,16 +194,15 @@ module tb_axi_ic;
     genvar g;
     generate
         for (g = 0; g < 5; g = g + 1) begin : g_slv
-            axi_mem_model #(.ID_W(ID_W), .DATA_W(DATA_W), .ADDR_W(ADDR_W)) u_slv (
+            axi_slave_model #(.ID_W(ID_W), .DATA_W(DATA_W), .ADDR_W(ADDR_W)) u_slv (
                 .clk(clk), .rst_n(rst_n),
-                .awid(slv_awid[g]), .awaddr(slv_awaddr[g]), .awlen(slv_awlen[g]),
-                .awsize(slv_awsize[g]), .awburst(slv_awburst[g]), .awvalid(slv_awvalid[g]), .awready(slv_awready[g]),
-                .wdata(slv_wdata[g]), .wstrb(slv_wstrb[g]), .wlast(slv_wlast[g]), .wvalid(slv_wvalid[g]), .wready(slv_wready[g]),
-                .bid(slv_bid[g]), .bresp(slv_bresp[g]), .bvalid(slv_bvalid[g]), .bready(slv_bready[g]),
-                .arid(slv_arid[g]), .araddr(slv_araddr[g]), .arlen(slv_arlen[g]),
-                .arsize(slv_arsize[g]), .arburst(slv_arburst[g]), .arvalid(slv_arvalid[g]), .arready(slv_arready[g]),
-                .rid(slv_rid[g]), .rdata(slv_rdata[g]), .rresp(slv_rresp[g]), .rlast(slv_rlast[g]), .rvalid(slv_rvalid[g]), .rready(slv_rready[g]),
-                .err_addr(32'hFFFF_FFFF)
+                .s_awid(slv_awid[g]), .s_awaddr(slv_awaddr[g]), .s_awlen(slv_awlen[g]),
+                .s_awsize(slv_awsize[g]), .s_awburst(slv_awburst[g]), .s_awvalid(slv_awvalid[g]), .s_awready(slv_awready[g]),
+                .s_wdata(slv_wdata[g]), .s_wstrb(slv_wstrb[g]), .s_wlast(slv_wlast[g]), .s_wvalid(slv_wvalid[g]), .s_wready(slv_wready[g]),
+                .s_bid(slv_bid[g]), .s_bresp(slv_bresp[g]), .s_bvalid(slv_bvalid[g]), .s_bready(slv_bready[g]),
+                .s_arid(slv_arid[g]), .s_araddr(slv_araddr[g]), .s_arlen(slv_arlen[g]),
+                .s_arsize(slv_arsize[g]), .s_arburst(slv_arburst[g]), .s_arvalid(slv_arvalid[g]), .s_arready(slv_arready[g]),
+                .s_rid(slv_rid[g]), .s_rdata(slv_rdata[g]), .s_rresp(slv_rresp[g]), .s_rlast(slv_rlast[g]), .s_rvalid(slv_rvalid[g]), .s_rready(slv_rready[g])
             );
         end
     endgenerate
