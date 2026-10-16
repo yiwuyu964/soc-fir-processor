@@ -115,8 +115,24 @@ module tb_soc;
     task uart_recv_byte;
         output [7:0] b;
         integer i;
+        integer w;
+        reg got_start;
         begin
-            @(negedge uart_txd);            // 等起始位下降沿
+            // 等起始位下降沿，但【必须有超时】——
+            // 否则 DUT 不回显时这里会永久挂住，仿真跑到全局超时才结束
+            // 一个字节在 10M 波特下只要 100 拍；给 5000 拍（50 个字节时间）
+            // 已经非常宽裕。别写太大 —— 8 个字节各等一次，累积起来会顶穿全局超时。
+            got_start = 0;
+            for (w = 0; w < 5000; w = w + 1) begin
+                @(posedge clk);
+                if (uart_txd === 1'b0) begin got_start = 1; w = 5000; end
+            end
+            if (!got_start) begin
+                b = 8'hXX;
+                $display("      ⚠️ 等不到起始位（%0t）—— 对端没发数据", $time);
+                disable uart_recv_byte;
+            end
+            #(BAUD_NS/2);                   // 半位对齐到第一个数据位中点
             #(BAUD_NS + BAUD_NS/2);         // 跳到第一个数据位的中点
             for (i = 0; i < 8; i = i + 1) begin
                 b[i] = uart_txd;
@@ -177,16 +193,31 @@ module tb_soc;
     integer guard;
 
     initial begin
-        $dumpfile("tb_soc.vcd");
-        $dumpvars(0, tb_soc);
+        // ⚠️ 波形默认【不录】。
+        //   原因：$dumpvars(0, tb_soc) 会把 16384 个字的 SRAM 阵列
+        //   每次变化全录进 VCD —— CPU 一跑起来波形就爆，仿真慢到跑不完
+        //   （实测 10 分钟不结束；关掉后秒级完成）。
+        //   要看波形：vvp sim.out +vcd      只录顶层信号，够看控制流。
+        if ($test$plusargs("vcd")) begin
+            $dumpfile("tb_soc.vcd");
+            $dumpvars(1, tb_soc);
+        end
 
         // ---- 复位期间把固件装进 SRAM ----
         rst_n = 0;
         for (i = 0; i < SW_DEPTH; i = i + 1) dut.u_sram.mem[i] = 32'h0;
 
         if (!$test$plusargs("nofw")) begin
+            // 先填 0 再装固件：SRAM 没有复位，不填的话未初始化区是 X，
+            // CPU 一读到 X 就可能跑飞
+            $display("  装载固件: %0s", FW_HEX);
             $readmemh(FW_HEX, dut.u_sram.mem);
-            $display("  已装入固件: %0s", FW_HEX);
+            // 说明：固件通常只有几百个字，而 SRAM 有 16384 个字，
+            // iverilog 会报 "Not enough words in the file for the requested
+            // range" —— 这是【正常】的，它只填固件那部分，其余保持预填的 0。
+            // 不显示"已装入"，免得文件不存在时也报成功。
+            if (sram_word(0) === 32'hxxxxxxxx || sram_word(1) === 32'hxxxxxxxx)
+                $display("  ❌ 固件没装进去（文件不存在或格式不对）—— 先跑 python sw/build.py");
         end else begin
             $display("  ⚠️ 跳过固件装载（+nofw），只做结构性检查");
         end
@@ -204,11 +235,12 @@ module tb_soc;
         $display("[1] CPU 启动（等测试信箱出现魔数）");
         guard = 0;
         mb = 32'h0;
-        while ((mb !== 32'h534F4321) && (guard < 200000)) begin
+        while ((mb !== 32'h534F4321) && (guard < 20000)) begin
             @(negedge clk);
             mb = sram_word(MB_WORD + 0);
             guard = guard + 1;
         end
+        $display("      等了 %0d 拍", guard);
         chk(mb, 32'h534F4321, "信箱魔数 'SOC!'（CPU 取指+执行正常）");
         if (mb !== 32'h534F4321) begin
             $display("  ⚠️ CPU 没跑起来 —— 后面的测试跳过。");
@@ -280,7 +312,7 @@ module tb_soc;
     end
 
     initial begin
-        #20_000_000;   // 20ms 仿真时间上限（10M 波特下足够）
+        #3_000_000;    // 3ms 仿真时间上限（10M 波特下，几十个字节绰绰有余）
         $display("!!!! TIMEOUT：仿真超时");
         $finish;
     end
