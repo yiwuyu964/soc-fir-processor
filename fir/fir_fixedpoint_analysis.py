@@ -76,12 +76,13 @@ def width_report(vals, cw, dw):
 
     # ---- 乘积 ----
     out['prod_w'] = dw + cw
-    out['prod_min'] = -(1 << (dw - 1)) * ((1 << (cw - 1)) - 1)
+    out['prod_min'] = min(-(1 << (dw - 1)) * ((1 << (cw - 1)) - 1),
+                          -((1 << (dw - 1)) - 1) * (1 << (cw - 1)))
     out['prod_max'] = (1 << (dw - 1)) * (1 << (cw - 1))       # (-2^15)*(-2^15) = 2^30
     out['prod_fits'] = out['prod_max'] <= signed_range(dw + cw)[1]
 
     # ---- 累加: 任意系数的最坏界 ----
-    worst_any = xmax * n * xmax
+    worst_any = xmax * n * (1 << (cw - 1))
     out['acc_worst_any'] = worst_any
     out['acc_w_any'] = bits_needed(worst_any)
 
@@ -112,7 +113,7 @@ def width_report(vals, cw, dw):
 def error_report(r, cw, dw):
     lsb_frac = 2.0 ** -(dw - 1)                    # 1 LSB 占满量程
     dc_err = abs(r['sum_h'] - (1 << (cw - 1))) / float(1 << (cw - 1))
-    coef_q = 0.5 * lsb_frac                        # 单系数 ±0.5 LSB
+    coef_q = 0.5 * 2.0 ** -(cw - 1)                # 单系数 ±0.5 LSB
     items = [
         ('系数量化 (Q1.15, 单系数 ±0.5 LSB)', coef_q * 100),
         ('系数和偏差 (直流增益)', dc_err * 100),
@@ -130,7 +131,7 @@ def main():
     ap = argparse.ArgumentParser(description='FIR 定点方案计算器（任务 5）')
     here = os.path.dirname(os.path.abspath(__file__))
     ap.add_argument('--coeffs', type=str, default=None,
-                    help='coeffs.vh 路径，默认 08_soc/coeffs.vh')
+                    help='coeffs.vh 路径，默认脚本旁的 coeffs.vh')
     ap.add_argument('--taps', type=int, default=81)
     ap.add_argument('--cw', type=int, default=16, help='系数位宽，默认 16')
     ap.add_argument('--dw', type=int, default=16, help='数据位宽，默认 16')
@@ -138,7 +139,7 @@ def main():
 
     path = args.coeffs
     if path is None:
-        for cand in ('08_soc/coeffs.vh', '05_fir81/coeffs.vh', '04_fir9/coeffs.vh'):
+        for cand in ('coeffs.vh', '08_soc/coeffs.vh', '05_fir81/coeffs.vh', '04_fir9/coeffs.vh'):
             p = os.path.join(here, cand)
             if os.path.exists(p):
                 path = p
@@ -209,8 +210,8 @@ def main():
     print('--- 5. 误差预算（占满量程百分比）---')
     for name, pct in items:
         print('  %-42s %8.4f%%' % (name, pct))
-    print('  %-42s %8.4f%%' % ('合计（最坏叠加）', total))
-    print('  赛题要求 < 0.1%%，余量 %.1f 倍' % (0.1 / total if total else float('inf')))
+    print('  %-42s %8.4f%%' % ('所列项相加（不是全滤波误差上界）', total))
+    print('  单系数量化量级不能直接作为整段卷积误差；需结合输入幅度与全部抽头误差。')
     print('')
 
     print('--- 6. 结论 ---')

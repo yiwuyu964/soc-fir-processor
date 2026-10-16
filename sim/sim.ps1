@@ -83,7 +83,7 @@ if ($List) {
     exit 0
 }
 
-$OutDir = Join-Path $env:TEMP ("socsim_" + (Get-Date -Format "HHmmss"))
+$OutDir = Join-Path $env:TEMP ("socsim_" + [guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 
 # ============================================================
@@ -94,10 +94,10 @@ if (-not $NoLint) {
     $lintOut = Join-Path $OutDir "lintall.out"
     $lintLog = & $IV -g2012 -Wall -I $IncDir -o $lintOut ($Rtl + $Helpers + ($AllTb | ForEach-Object { $_.FullName })) 2>&1
     $lintErr = @($lintLog | Select-String -Pattern "error:")
-    if ($lintErr.Count -gt 0) {
+    if ($LASTEXITCODE -ne 0) {
         Write-Host ""
         Write-Host "全量编译失败 —— 这类问题单跑各自的 TB 是发现不了的：" -ForegroundColor Red
-        $lintErr | ForEach-Object { Write-Host ("   " + $_.Line.Trim()) -ForegroundColor Red }
+        $lintLog | ForEach-Object { Write-Host ("   " + $_.ToString().Trim()) -ForegroundColor Red }
         Write-Host ""
         Write-Host "   最常见的两种原因：" -ForegroundColor Yellow
         Write-Host "   1. 两个 TB 里定义了同名的模块（如 axi_slave_model / axi_mem_model）" -ForegroundColor Yellow
@@ -115,6 +115,16 @@ Write-Host ""
 # ============================================================
 # 4. 逐个测试台：编译 + 运行
 # ============================================================
+# Build only the diagnostic image; never overwrite sw/firmware.hex.
+if ((!$Only -or "tb_soc_probe" -match $Only)) {
+    & python (Join-Path $RepoRoot "sim/tinyfw.py")
+    if ($LASTEXITCODE -ne 0) { exit 1 }
+}
+if ((!$Only -or "tb_fir_core" -match $Only -or "tb_fir" -match $Only)) {
+    $VectorDir = Join-Path $OutDir "fir"
+    & python (Join-Path $RepoRoot "fir/fir_coeff.py") --outdir $VectorDir | Out-Null
+    if ($LASTEXITCODE -ne 0) { exit 1 }
+}
 $Results = @()
 $Idx = 0
 foreach ($tb in $AllTb) {
@@ -125,7 +135,7 @@ foreach ($tb in $AllTb) {
     Write-Host ("[{0}/{1}] {2}" -f $Idx, $AllTb.Count, $name) -ForegroundColor Cyan -NoNewline
 
     $out = Join-Path $OutDir ($name + ".out")
-    $cLog = & $IV -g2012 -Wall -I $IncDir -o $out ($Rtl + $Helpers + $tb.FullName) 2>&1
+    $cLog = & $IV -g2012 -Wall -s $name -I $IncDir -o $out ($Rtl + $Helpers + $tb.FullName) 2>&1
     if ($LASTEXITCODE -ne 0) {
         $firstErr = ($cLog | Select-String -Pattern "error:" | Select-Object -First 1)
         Write-Host "  编译失败" -ForegroundColor Red
@@ -134,11 +144,18 @@ foreach ($tb in $AllTb) {
         continue
     }
 
-    $rLog = (& $VV $out 2>&1) -join $NL
+    # Run in an isolated directory so VCDs never overwrite users' waveforms.
+    $RunSw = Join-Path $OutDir "sw"
+    New-Item -ItemType Directory -Force $RunSw | Out-Null
+    Get-ChildItem (Join-Path $RepoRoot "sw") -Filter *.hex | Copy-Item -Destination $RunSw
+    Push-Location $OutDir
+    try { $rLog = (& $VV $out 2>&1) -join $NL } finally { Pop-Location }
+    $runExit = $LASTEXITCODE
     $verdict = ($rLog -split $NL | Select-String -Pattern "PASS|FAIL|TIMEOUT" | Select-Object -Last 1)
-    $txt = if ($verdict) { $verdict.Line.Trim() } else { "(无 PASS/FAIL 输出)" }
+    $txt = if ($verdict) { $verdict.Line.Trim() } else { "(无结论输出)" }
 
-    if     ($txt -match "PASS")    { $mark = "通过"; $color = "Green" }
+    if ($runExit -ne 0 -or $rLog -match "(?im)^.*(FAIL|TIMEOUT|FATAL|ERROR:).*$") { $txt = ($rLog -split $NL | Select-String -Pattern "FAIL|TIMEOUT|FATAL|ERROR:" | Select-Object -Last 1).Line; $mark = "失败"; $color = "Red" }
+    elseif ($verdict -and $txt -match "PASS")    { $mark = "通过"; $color = "Green" }
     elseif ($txt -match "TIMEOUT") { $mark = "超时"; $color = "Yellow" }
     elseif ($txt -match "FAIL")    { $mark = "失败"; $color = "Red" }
     else                           { $mark = "无结论"; $color = "Yellow" }
@@ -147,12 +164,8 @@ foreach ($tb in $AllTb) {
     $Results += [pscustomobject]@{ 测试台=$name; 编译="OK"; 运行=$mark; 结论=$txt }
 }
 
-# ---- 清理波形文件（免得仓库变脏）----
-if (-not $KeepVcd) {
-    Get-ChildItem $RepoRoot -Filter "*.vcd" -File -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
-    Get-ChildItem (Join-Path $RepoRoot "TB") -Filter "*.vcd" -File -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
-}
-
+if ($KeepVcd) { Write-Host ("波形目录: " + $OutDir) }
+else { Get-ChildItem -LiteralPath $OutDir -Filter *.vcd -File | Remove-Item -Force }
 # ============================================================
 # 5. 汇总
 # ============================================================
@@ -160,7 +173,8 @@ Write-Host ""
 Write-Host ("=" * 78) -ForegroundColor White
 $Results | Format-Table -AutoSize | Out-String -Width 200 | Write-Host
 $bad = @($Results | Where-Object { $_.运行 -ne "通过" })
-if ($bad.Count -eq 0) {
+if ($Results.Count -eq 0) { Write-Host "没有匹配的测试台" -ForegroundColor Red; exit 1 }
+if ($Results.Count -gt 0 -and $bad.Count -eq 0) {
     Write-Host ("===== 全部通过：{0} 个测试台 =====" -f $Results.Count) -ForegroundColor Green
     exit 0
 } else {

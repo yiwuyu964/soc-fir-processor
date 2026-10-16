@@ -153,6 +153,11 @@ module axi_protocol_checker #(
     reg [1:0]            arburst_d;
 
     reg                  rvalid_d, rready_d;
+    reg [ID_W-1:0] awid_d, arid_d, bid_d, rid_d;
+    reg [DATA_W-1:0] wdata_d, rdata_d;
+    reg [DATA_W/8-1:0] wstrb_d;
+    reg wlast_d, rlast_d;
+    reg [1:0] bresp_d, rresp_d;
 
     always @(posedge clk) begin
         awvalid_d <= awvalid;  awready_d <= awready;
@@ -167,6 +172,10 @@ module axi_protocol_checker #(
         arsize_d  <= arsize;   arburst_d <= arburst;
 
         rvalid_d  <= rvalid;   rready_d  <= rready;
+        awid_d <= awid; arid_d <= arid; bid_d <= bid; rid_d <= rid;
+        wdata_d <= wdata; wstrb_d <= wstrb; wlast_d <= wlast;
+        rdata_d <= rdata; rlast_d <= rlast;
+        bresp_d <= bresp; rresp_d <= rresp;
     end
 
     wire aw_hs = awvalid && awready;      // AW 握手
@@ -196,28 +205,34 @@ module axi_protocol_checker #(
             // ---- AW ----
             if (awvalid_d && !awready_d) begin
                 if (!awvalid) err("R2", "AWVALID 在握手完成前被撤销");
-                if (awvalid && (awaddr !== awaddr_d || awlen !== awlen_d ||
+                if (awvalid && (awid !== awid_d || awaddr !== awaddr_d || awlen !== awlen_d ||
                                 awsize !== awsize_d || awburst !== awburst_d))
                     err("R3", "AW 载荷在握手完成前发生变化");
             end
             // ---- W ----
             if (wvalid_d && !wready_d) begin
                 if (!wvalid) err("R2", "WVALID 在握手完成前被撤销");
+                if (wvalid && {wdata,wstrb,wlast} !== {wdata_d,wstrb_d,wlast_d})
+                    err("R3", "W payload changed under backpressure");
             end
             // ---- B ----
             if (bvalid_d && !bready_d) begin
                 if (!bvalid) err("R2", "BVALID 在握手完成前被撤销");
+                if (bvalid && {bid,bresp} !== {bid_d,bresp_d})
+                    err("R3", "B payload changed under backpressure");
             end
             // ---- AR ----
             if (arvalid_d && !arready_d) begin
                 if (!arvalid) err("R2", "ARVALID 在握手完成前被撤销");
-                if (arvalid && (araddr !== araddr_d || arlen !== arlen_d ||
+                if (arvalid && (arid !== arid_d || araddr !== araddr_d || arlen !== arlen_d ||
                                 arsize !== arsize_d || arburst !== arburst_d))
                     err("R3", "AR 载荷在握手完成前发生变化");
             end
             // ---- R ----
             if (rvalid_d && !rready_d) begin
                 if (!rvalid) err("R2", "RVALID 在握手完成前被撤销");
+                if (rvalid && {rid,rdata,rresp,rlast} !== {rid_d,rdata_d,rresp_d,rlast_d})
+                    err("R3", "R payload changed under backpressure");
             end
         end
     end
@@ -245,6 +260,10 @@ module axi_protocol_checker #(
             // 2'b11 是保留值
             if (burst == 2'b11)
                 err("R11", {tag, " 突发类型为保留值 2'b11"});
+            if (burst == 2'b00 && len > 15)
+                err("R11", {tag, " FIXED burst exceeds 16 beats"});
+            if (size > $clog2(DATA_W/8))
+                err("R11", {tag, " SIZE exceeds data bus width"});
 
             // R9：不跨 4KB 边界（只对 INCR 有意义；FIXED 不跨）
             if (burst == 2'b01) begin

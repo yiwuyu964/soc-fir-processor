@@ -1,1 +1,14 @@
-仿真脚本与 Makefile
+在仓库根目录运行：
+  python sw/build.py              先编译真实 C 固件（也支持 --clang/--lld）
+  sim\sim.cmd                     全量编译检查，然后逐个测试台运行
+  sim\sim.cmd -Only soc           只跑 SoC 相关测试
+  sim\sim.cmd -List               列出测试台
+  sim\sim.cmd -KeepVcd            保留并打印临时波形目录
+  python sim/test_tools.py        固件转换器、FIR 工具回归
+
+FIR 向量会自动生成到独立临时目录，诊断探针单独生成 sw/probe.hex。
+正式固件 sw/firmware.hex 仍必须先编译，缺失时测试会失败。
+每个测试台显式指定唯一顶层；编译/运行非零退出、FAIL、TIMEOUT、
+FATAL、ERROR 或没有 PASS 结论均判失败；无匹配测试也返回失败。
+波形在临时目录生成，不覆盖仓库中的既有波形。
+设置 IVERILOG 为 iverilog 可执行文件路径，可启用 test_tools.py 的头文件编译检查。

@@ -216,7 +216,7 @@ module fir #(
     wire aw_in_ctrl = (w_start >= 14'h000) && (w_end <= 14'h003);
     wire aw_in_din  = (w_start >= 14'h004) && (w_end <= 14'h007);
     wire aw_in_coef = (w_start >= 14'h100) && (w_end <= {2'd0, OFF_COEF_END});
-    wire aw_ok      = (s_axi_awsize <= 3'd2) && (s_axi_awburst != BURST_WRAP)
+    wire aw_ok      = (s_axi_awsize <= 3'd2) && !s_axi_awburst[1]
                     && (aw_in_ctrl || aw_in_din || aw_in_coef);
 
     // ---- 读侧：合法区域 = DOUT+STATUS[0x008, 0x00F]（相邻、同为只读）----
@@ -226,7 +226,7 @@ module fir #(
     wire [13:0] r_start  = {2'd0, s_axi_araddr[11:0]};
     wire [13:0] r_end    = r_start + r_bytes - 14'd1;
 
-    wire ar_ok = (s_axi_arsize <= 3'd2) && (s_axi_arburst != BURST_WRAP)
+    wire ar_ok = (s_axi_arsize <= 3'd2) && !s_axi_arburst[1]
                && (r_start >= 14'h008) && (r_end <= 14'h00F);
 
     // ============================================================
@@ -265,9 +265,9 @@ module fir #(
     //   dout_pop       ：弹出队头（rdata 组合取自队头，握手当拍弹出，不丢拍不重读）
     //   status_read    ：读 STATUS 握手 → 清中断锁存
     //   read_empty_err ：DOUT 拍握手时 FIFO 空 → 该拍 SLVERR + 锁 err
-    wire dout_pop       = r_hs && rbeat_valid && r_is_dout && !fifo_empty;
+    wire dout_pop       = r_hs && rbeat_valid && r_is_dout && (s_axi_rresp == RESP_OKAY);
     wire status_read    = r_hs && rbeat_valid && r_is_status;
-    wire read_empty_err = r_hs && rbeat_valid && r_is_dout && fifo_empty;
+    wire read_empty_err = r_hs && rbeat_valid && r_is_dout && (s_axi_rresp == RESP_SLVERR);
     wire overflow_err   = dout_v && fifo_full;      // 满时又出结果（丢弃）
     wire fifo_drained   = dout_pop && (fifo_count == {{(CNT_W-1){1'b0}}, 1'b1});
 
@@ -291,12 +291,30 @@ module fir #(
          err_latch, !fifo_empty, fifo_full, fifo_empty};
 
     assign s_axi_rid = arid_r;
-    assign s_axi_rdata = rbeat_valid
-                       ? (r_is_dout   ? {{(DATA_W-DW){1'b0}}, fifo_rdata}
+    wire [DATA_W-1:0] live_rdata = rbeat_valid
+                       ? (r_is_dout   ? (fifo_empty ? {DATA_W{1'b0}} : {{(DATA_W-DW){1'b0}}, fifo_rdata})
                                       : (r_is_status ? status_word : {DATA_W{1'b0}}))
                        : {DATA_W{1'b0}};
-    assign s_axi_rresp = (in_rbeat && (abort || (r_is_dout && fifo_empty)))
+    wire [1:0] live_rresp = (in_rbeat && (abort || (r_is_dout && fifo_empty)))
                        ? RESP_SLVERR : RESP_OKAY;
+    // Snapshot stalled beats: status and an empty FIFO may change while waiting.
+    reg r_hold;
+    reg [DATA_W-1:0] held_rdata;
+    reg [1:0] held_rresp;
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            r_hold <= 1'b0;
+            held_rdata <= 0;
+            held_rresp <= 0;
+        end else if (r_hs) r_hold <= 1'b0;
+        else if (rvalid && !r_hold) begin
+            r_hold <= 1'b1;
+            held_rdata <= live_rdata;
+            held_rresp <= live_rresp;
+        end
+    end
+    assign s_axi_rdata = r_hold ? held_rdata : live_rdata;
+    assign s_axi_rresp = r_hold ? held_rresp : live_rresp;
 
     assign s_axi_bid = awid_r;
 

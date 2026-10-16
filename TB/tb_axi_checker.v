@@ -317,6 +317,31 @@ module tb_axi_checker;
 
         // ----------------------------------------------------
         $display("");
+        // Negative tests for fields omitted by the original payload monitor.
+        do_reset;
+        @(negedge clk); awvalid=1;awready=0;awid=0;
+        repeat(2) @(negedge clk); awid=1;
+        repeat(2) @(negedge clk); expect_at_least(1,"stalled AWID change");
+        do_reset;
+        @(negedge clk); wvalid=1;wready=0;wdata=0;
+        repeat(2) @(negedge clk); wdata=1;
+        repeat(2) @(negedge clk); expect_at_least(1,"stalled WDATA change");
+        do_reset;
+        @(negedge clk); bvalid=1;bready=0;bresp=0;
+        repeat(2) @(negedge clk); bresp=2;
+        repeat(2) @(negedge clk); expect_at_least(1,"stalled BRESP change");
+        do_reset;
+        @(negedge clk); arvalid=1;arready=0;arid=0;
+        repeat(2) @(negedge clk); arid=1;
+        repeat(2) @(negedge clk); expect_at_least(1,"stalled ARID change");
+        do_reset;
+        @(negedge clk); rvalid=1;rready=0;rdata=0;
+        repeat(2) @(negedge clk); rdata=1;
+        repeat(2) @(negedge clk); expect_at_least(1,"stalled RDATA change");
+        do_reset;
+        @(negedge clk);awvalid=1;awready=1;awburst=0;awlen=16;
+        @(negedge clk);awvalid=0;
+        repeat(2) @(negedge clk); expect_at_least(1,"FIXED length limit");
         $display("=========================================================");
         if (errors == 0)
             $display("===== PASS: 自测 %0d 项全部通过（不误报、不漏报）=====", checks);

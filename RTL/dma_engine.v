@@ -171,6 +171,8 @@ module dma_engine #(
         else                                seg_len = remaining[8:0];
         if (seg_src_lim < {23'b0, seg_len}) seg_len = seg_src_lim[8:0];
         if (seg_dst_lim < {23'b0, seg_len}) seg_len = seg_dst_lim[8:0];
+        // AXI4 permits at most 16 beats for FIXED bursts.
+        if ((!src_inc || !dst_inc) && seg_len > 9'd16) seg_len = 9'd16;
     end
 
     // ============================================================
@@ -212,6 +214,7 @@ module dma_engine #(
             S_IDLE: begin
                 if (start_go) begin
                     if (cfg_len == 32'd0) state_next = S_DONE;
+                    else if (cfg_src[1:0] != 0 || cfg_dst[1:0] != 0) state_next = S_ERR;
                     else                  state_next = S_R_AR;
                 end
             end
@@ -239,6 +242,7 @@ module dma_engine #(
                     if (m_bresp[1])       state_next = S_ERR;
                     else if ((remaining - {23'b0, seg_len}) == 32'd0)
                                           state_next = S_DONE;
+                    else if (cfg_src[1:0] != 0 || cfg_dst[1:0] != 0) state_next = S_ERR;
                     else                  state_next = S_R_AR;
                 end
             end

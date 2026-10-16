@@ -180,6 +180,16 @@ module soc_top #(
     wire [1:0]           ap_bresp, ap_rresp;
     wire                 ap_bvalid, ap_bready, ap_rlast, ap_rvalid, ap_rready;
     wire [DATA_W-1:0]    ap_rdata;
+    wire [ID_W-1:0]      ap_awid, ap_arid;
+    reg [ID_W-1:0]       ap_bid, ap_rid;
+    // The bridge serializes transactions, so one tag per direction suffices.
+    always @(posedge clk or negedge rst_n_sync) begin
+        if (!rst_n_sync) begin ap_bid <= 0; ap_rid <= 0; end
+        else begin
+            if (ap_awvalid && ap_awready) ap_bid <= ap_awid;
+            if (ap_arvalid && ap_arready) ap_rid <= ap_arid;
+        end
+    end
 
     // ---- APB（桥 → UART）----
     wire                 p_psel, p_penable, p_pwrite, p_pready, p_pslverr;
@@ -251,7 +261,8 @@ module soc_top #(
     // ============================================================
     // 4. AXI 互连（2 主 × 5 从）
     // ============================================================
-    axi_ic #(.DATA_W(DATA_W), .ADDR_W(ADDR_W), .ID_W(ID_W), .N_MASTER(2), .N_SLAVE(5)) u_ic (
+    axi_ic #(.DATA_W(DATA_W), .ADDR_W(ADDR_W), .ID_W(ID_W), .N_MASTER(2),
+             .N_SLAVE(5), .M2_RESERVED(1)) u_ic (
         .clk(clk), .rst_n(rst_n_sync),
         // ---- 从口 0：CPU 桥（ID=0）----
         .s0_axi_awid(b_awid), .s0_axi_awaddr(b_awaddr), .s0_axi_awlen(b_awlen),
@@ -323,18 +334,18 @@ module soc_top #(
         .m3_axi_rid(sr_rid), .m3_axi_rdata(sr_rdata), .m3_axi_rresp(sr_rresp),
         .m3_axi_rlast(sr_rlast), .m3_axi_rvalid(sr_rvalid), .m3_axi_rready(sr_rready),
         // ---- 主口 4：AXI→APB 桥 @0x4000_2000 ----
-        // 该桥没有 ID 与 WSTRB：ID 输出悬空、ID 输入绑 0（只有 CPU 会访问 APB 区），
-        // WSTRB 桥内部按 AWSIZE+地址自算，不用连。
-        .m4_axi_awid(), .m4_axi_awaddr(ap_awaddr), .m4_axi_awlen(ap_awlen),
+        // ID 在桥外按地址握手锁存，确保 CPU/DMA 的响应都回到原主设备。
+        // WSTRB 桥内部按 AWSIZE+地址自算。
+        .m4_axi_awid(ap_awid), .m4_axi_awaddr(ap_awaddr), .m4_axi_awlen(ap_awlen),
         .m4_axi_awsize(ap_awsize), .m4_axi_awburst(ap_awburst),
         .m4_axi_awvalid(ap_awvalid), .m4_axi_awready(ap_awready),
         .m4_axi_wdata(ap_wdata), .m4_axi_wstrb(), .m4_axi_wlast(ap_wlast),
         .m4_axi_wvalid(ap_wvalid), .m4_axi_wready(ap_wready),
-        .m4_axi_bid(4'd0), .m4_axi_bresp(ap_bresp), .m4_axi_bvalid(ap_bvalid), .m4_axi_bready(ap_bready),
-        .m4_axi_arid(), .m4_axi_araddr(ap_araddr), .m4_axi_arlen(ap_arlen),
+        .m4_axi_bid(ap_bid), .m4_axi_bresp(ap_bresp), .m4_axi_bvalid(ap_bvalid), .m4_axi_bready(ap_bready),
+        .m4_axi_arid(ap_arid), .m4_axi_araddr(ap_araddr), .m4_axi_arlen(ap_arlen),
         .m4_axi_arsize(ap_arsize), .m4_axi_arburst(ap_arburst),
         .m4_axi_arvalid(ap_arvalid), .m4_axi_arready(ap_arready),
-        .m4_axi_rid(4'd0), .m4_axi_rdata(ap_rdata), .m4_axi_rresp(ap_rresp),
+        .m4_axi_rid(ap_rid), .m4_axi_rdata(ap_rdata), .m4_axi_rresp(ap_rresp),
         .m4_axi_rlast(ap_rlast), .m4_axi_rvalid(ap_rvalid), .m4_axi_rready(ap_rready)
     );
 
@@ -414,7 +425,8 @@ module soc_top #(
     // ============================================================
     // 8. AXI→APB 桥 + UART（@0x4000_2000）
     // ============================================================
-    axi_to_apb #(.ADDR_W(ADDR_W), .DATA_W(DATA_W), .TIMEOUT(0)) u_axi2apb (
+    axi_to_apb #(.ADDR_W(ADDR_W), .DATA_W(DATA_W), .TIMEOUT(0),
+                 .BASE_ADDR(32'h4000_2000)) u_axi2apb (
         .clk(clk), .rst_n(rst_n_sync),
         // AXI 从口（← ic.m4；无 ID / 无 WSTRB）
         .awvalid(ap_awvalid), .awready(ap_awready), .awaddr(ap_awaddr),

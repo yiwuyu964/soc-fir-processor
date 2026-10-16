@@ -5,7 +5,7 @@
 //
 // 特性：
 //   · round-robin（轮转），不是固定优先级 —— 保证没有请求者被饿死
-//   · grant 是【组合】输出，随 req 与指针变化
+//   · 空闲时组合选择；等待 advance 时锁住 grant，保证背压下载荷稳定
 //   · 指针只在 advance（授权被消费 = 握手完成）那一拍前进，
 //     下一轮从"刚被服务的请求者的下一个"开始，公平轮转
 //
@@ -30,6 +30,8 @@ module axi_arbiter #(
 
     reg  [PW-1:0] ptr;                    // round-robin 指针
     reg  [N-1:0]  g;
+    reg  [N-1:0]  held;
+    reg           locked;
     reg           found;
     integer       i;
 
@@ -45,12 +47,22 @@ module axi_arbiter #(
         end
     end
 
-    assign grant = g;
+    assign grant = locked ? held : g;
 
     // ---- 指针：授权被消费后，下一轮从"下一个请求者"开始 ----
     always @(posedge clk or negedge rst_n) begin
-        if (!rst_n)        ptr <= {PW{1'b0}};
-        else if (advance)  ptr <= (ptr + 1'b1) % N;
+        if (!rst_n) begin
+            ptr <= {PW{1'b0}};
+            held <= {N{1'b0}};
+            locked <= 1'b0;
+        end else if (advance) begin
+            locked <= 1'b0;
+            for (integer k = 0; k < N; k = k + 1)
+                if (grant[k]) ptr <= (k == N-1) ? 0 : k + 1;
+        end else if (!locked && |g) begin
+            held <= g;
+            locked <= 1'b1;
+        end
     end
 
 endmodule

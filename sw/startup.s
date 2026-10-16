@@ -42,15 +42,15 @@ __isr_vector:
     .word   Default_Handler         @ 0x38  PendSV
     .word   Default_Handler         @ 0x3C  SysTick
     @ ---- 以下是外部中断 IRQ0 ~ IRQ31（异常号 16~47）----
-    .word   Default_Handler         @ IRQ0  FIR done
-    .word   Default_Handler         @ IRQ1  FIR err
-    .word   Default_Handler         @ IRQ2  DMA ch0
-    .word   Default_Handler         @ IRQ3  DMA ch1
-    .word   Default_Handler         @ IRQ4  DMA ch2
-    .word   Default_Handler         @ IRQ5  DMA ch3
-    .word   Default_Handler         @ IRQ6  DMA ch4
-    .word   Default_Handler         @ IRQ7  DMA ch5
-    .word   Default_Handler         @ IRQ8  DMA err
+    .word   FIR_DONE_Handler         @ IRQ0  FIR done
+    .word   FIR_ERR_Handler          @ IRQ1  FIR err
+    .word   DMA_DONE_Handler         @ IRQ2  DMA ch0
+    .word   DMA_DONE_Handler         @ IRQ3  DMA ch1
+    .word   DMA_DONE_Handler         @ IRQ4  DMA ch2
+    .word   DMA_DONE_Handler         @ IRQ5  DMA ch3
+    .word   DMA_DONE_Handler         @ IRQ6  DMA ch4
+    .word   DMA_DONE_Handler         @ IRQ7  DMA ch5
+    .word   DMA_ERR_Handler          @ IRQ8  DMA err
     .word   Default_Handler         @ IRQ9  预留
     .word   Default_Handler         @ IRQ10 预留
     .word   Default_Handler         @ IRQ11 预留（UART RX 无中断输出）
@@ -112,7 +112,6 @@ Reset_Handler:
 @ ------------------------------------------------------------
     .section .text.Default_Handler, "ax", %progbits
     .align 2
-    .global  Default_Handler
     .weak    Default_Handler
     .type    Default_Handler, %function
 Default_Handler:

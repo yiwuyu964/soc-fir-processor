@@ -56,7 +56,8 @@ def find_toolchain():
     # 1) PATH 里
     gcc = shutil.which("arm-none-eabi-gcc")
     if gcc:
-        objcopy = shutil.which("arm-none-eabi-objcopy")
+        sibling = os.path.join(os.path.dirname(gcc), "arm-none-eabi-objcopy" + (".exe" if os.name == "nt" else ""))
+        objcopy = sibling if os.path.isfile(sibling) else shutil.which("arm-none-eabi-objcopy")
         return gcc, objcopy
 
     # 2) 常见安装位置（含 ARM 官方安装器的版本化目录）
@@ -131,7 +132,32 @@ def run(cmd):
 def main():
     ap = argparse.ArgumentParser(description="编译 Cortex-M0 固件")
     ap.add_argument("--check", action="store_true", help="只探测工具链，不编译")
+    ap.add_argument("--clang", help="Optional ARM-capable clang executable")
+    ap.add_argument("--lld", help="ELF ld.lld executable (with --clang)")
     args = ap.parse_args()
+
+    if args.clang:
+        clang = os.path.abspath(args.clang)
+        lld = args.lld or shutil.which("ld.lld") or os.path.join(os.path.dirname(clang), "ld.lld.exe")
+        objcopy = os.path.join(os.path.dirname(clang), "llvm-objcopy.exe" if os.name == "nt" else "llvm-objcopy")
+        if not all(os.path.isfile(p) for p in (clang, lld, objcopy)):
+            ap.error("--clang requires clang, ELF ld.lld and adjacent llvm-objcopy")
+        if args.check:
+            print("clang: " + clang + "\nlld: " + lld)
+            return
+        objs = []
+        for src in SRCS:
+            obj = os.path.splitext(src)[0] + ".o"
+            flags = ["-ffreestanding", "-Os", "-Wall", "-Wextra"] if src.endswith('.c') else []
+            run([clang, "--target=arm-none-eabi", "-mcpu=cortex-m0", "-mthumb"] +
+                flags + ["-c", src, "-o", obj])
+            objs.append(obj)
+        run([lld, "-T", LD, "--gc-sections", "-Map=" + os.path.join(HERE, "firmware.map"),
+             "-o", ELF] + objs)
+        run([objcopy, "-O", "binary", ELF, BIN])
+        bin_to_word_hex(BIN, HEX)
+        print("Built C firmware: " + HEX)
+        return
 
     gcc, objcopy = find_toolchain()
 

@@ -64,7 +64,8 @@
 module axi_to_apb #(
     parameter ADDR_W  = 32,
     parameter DATA_W  = 32,
-    parameter TIMEOUT = 0              // 0 = 关闭超时保护
+    parameter TIMEOUT = 0,             // 0 = 关闭超时保护
+    parameter [ADDR_W-1:0] BASE_ADDR = 0
 )(
     input  wire                 clk,
     input  wire                 rst_n,
@@ -152,7 +153,8 @@ module axi_to_apb #(
     reg [2:0]        r_size;
     reg [1:0]        r_burst;
 
-    reg [15:0]       wait_cnt;      // 超时计数
+    localparam WAIT_W = (TIMEOUT > 1) ? $clog2(TIMEOUT) : 1;
+    reg [WAIT_W-1:0] wait_cnt;
 
     // PPROT：普通访问、安全态、数据访问（IHI0024 第 2 章）
     assign pprot = 3'b000;
@@ -178,8 +180,8 @@ module axi_to_apb #(
     wire r_hs  = rvalid  && rready;
 
     // ---- AXI 从设备 ready：只在空闲态、且没有未完成响应时接收 ----
-    assign awready = (state == S_IDLE) && !wr_pending && !bvalid;
-    assign arready = (state == S_IDLE) && !wr_pending && !rvalid;
+    assign awready = (state == S_IDLE) && !wr_pending && !bvalid && (!arvalid || rr);
+    assign arready = (state == S_IDLE) && !wr_pending && !rvalid && (!awvalid || !rr);
     assign wready  = (state == S_GETW);
 
     // ============================================================
@@ -212,7 +214,7 @@ module axi_to_apb #(
     // 若放在时序块里赋值，进入 SETUP 的第一拍它们仍是【上一笔的旧值】，
     // 到 ACCESS 才变过来——这违反 APB 协议（SETUP 阶段地址就必须有效）。
     // ------------------------------------------------------------
-    assign paddr  = cur_addr;
+    assign paddr  = cur_addr - BASE_ADDR;
     assign pwrite = is_write;
     assign pwdata = is_write ? beat_data : {DATA_W{1'b0}};
     assign pstrb  = is_write ? strb_of(w_size, cur_addr[1:0])
@@ -272,11 +274,12 @@ module axi_to_apb #(
                     w_len     <= awlen;
                     w_size    <= awsize;
                     w_burst   <= awburst;
+                    bresp     <= RESP_OKAY;
                     beat      <= 8'd0;
                     // WRAP 不支持：标记 abort，但仍然必须把 W 数据全部收完。
                     // 依据 AXI 协议：即使要返回错误响应，从设备也必须接收所有写数据拍，
                     // 否则主设备的 W 通道会一直等 WREADY，整条总线挂死。
-                    abort     <= (awburst == BURST_WRAP);
+                    abort     <= (awburst[1] || awsize > $clog2(DATA_W/8));
                     state     <= S_GETW;
                 end
                 else if (ar_hs) begin
@@ -288,9 +291,9 @@ module axi_to_apb #(
                     r_size    <= arsize;
                     r_burst   <= arburst;
                     beat      <= 8'd0;
-                    abort     <= (arburst == BURST_WRAP);
+                    abort     <= (arburst[1] || arsize > $clog2(DATA_W/8));
 
-                    if (arburst == BURST_WRAP) begin
+                    if (arburst[1] || arsize > $clog2(DATA_W/8)) begin
                         // WRAP 不支持：逐拍回 SLVERR，RLAST 落在最后一拍。
                         // 不提前终止突发，避免主设备侧行为不确定。
                         rdata  <= {DATA_W{1'b0}};
@@ -344,12 +347,13 @@ module axi_to_apb #(
                 if (pready) begin
                     // ---------------- 这次 APB 传输完成 ----------------
                     if (is_write) begin
-                        if (pslverr || (beat == w_len)) begin
-                            bresp      <= pslverr ? RESP_SLVERR : RESP_OKAY;
+                        if (beat == w_len) begin
+                            bresp      <= (pslverr || bresp == RESP_SLVERR) ? RESP_SLVERR : RESP_OKAY;
                             bvalid     <= 1'b1;
                             wr_pending <= 1'b0;
                             state      <= S_BRESP;
                         end else begin
+                            if (pslverr) bresp <= RESP_SLVERR;
                             cur_addr <= next_addr;
                             beat     <= beat + 8'd1;
                             state    <= S_GETW;
@@ -367,13 +371,20 @@ module axi_to_apb #(
                     // ---------------- 从设备超时 → 报错，避免死锁 ----------------
                     if (is_write) begin
                         bresp      <= RESP_SLVERR;
-                        bvalid     <= 1'b1;
-                        wr_pending <= 1'b0;
-                        state      <= S_BRESP;
+                        abort      <= 1'b1;
+                        if (beat == w_len) begin
+                            bvalid     <= 1'b1;
+                            wr_pending <= 1'b0;
+                            state      <= S_BRESP;
+                        end else begin
+                            beat <= beat + 8'd1;
+                            state <= S_GETW;
+                        end
                     end else begin
                         rdata  <= {DATA_W{1'b0}};
                         rresp  <= RESP_SLVERR;
-                        rlast  <= 1'b1;
+                        rlast  <= (beat == r_len);
+                        abort  <= 1'b1;
                         rvalid <= 1'b1;
                         state  <= S_RBEAT;
                     end

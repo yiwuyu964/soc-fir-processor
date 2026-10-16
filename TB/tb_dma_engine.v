@@ -318,6 +318,16 @@ module tb_dma_engine;
         err_addr = 32'hFFFF_FFFF;
 
         // ----------------------------------------------------
+        // A 40-word FIXED source must be split into <=16-beat bursts.
+        wr_mem_word(32'h100,32'habcdef01);
+        run_dma(32'h100,32'h300,40,0,1);
+        wait_done;
+        chk_mem_word(32'h39c,32'habcdef01,"FIXED length split final word");
+        run_dma(32'hfff,32'h300,1,1,1);
+        repeat(5) @(negedge clk);
+        chk(status[2],1,"misaligned DMA rejected without AXI traffic");
+        chk(status[0],0,"misaligned DMA does not hang");
+
         // [8] done/err 脉冲形状（一拍）
         // ----------------------------------------------------
         $display("[8] done 脉冲形状");

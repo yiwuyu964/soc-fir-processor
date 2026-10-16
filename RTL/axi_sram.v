@@ -157,7 +157,7 @@ module axi_sram #(
     wire [16:0]     w_nbytes = w_nbeats << s_axi_awsize;
     wire [ADDR_W:0] w_end    = {1'b0, s_axi_awaddr} + w_nbytes;
     wire            w_range_bad = ({1'b0, s_axi_awaddr} < SRAM_LO) || (w_end > SRAM_HI);
-    wire            w_type_bad  = (s_axi_awsize > 3'd2) || (s_axi_awburst == BURST_WRAP);
+    wire            w_type_bad  = (s_axi_awsize > 3'd2) || s_axi_awburst[1];
     wire [1:0]      w_resp_now  = w_range_bad ? RESP_DECERR
                                 : (w_type_bad  ? RESP_SLVERR : RESP_OKAY);
 
@@ -184,7 +184,7 @@ module axi_sram #(
     // 当前写拍地址（INCR 递增 / FIXED 不变）与字索引
     wire [ADDR_W-1:0] w_beat_addr = (w_burst == BURST_FIXED) ? w_start
                                   : (w_start + ({{(ADDR_W-8){1'b0}}, w_beat} << w_size));
-    wire [AW-1:0]     w_word_idx  = w_beat_addr[AW+1:2];
+    wire [AW-1:0]     w_word_idx  = (w_beat_addr - BASE_ADDR) >> 2;
 
     always @(*) begin
         ws_next = ws_cur;
@@ -205,7 +205,7 @@ module axi_sram #(
     wire [16:0]     r_nbytes = r_nbeats << s_axi_arsize;
     wire [ADDR_W:0] r_end    = {1'b0, s_axi_araddr} + r_nbytes;
     wire            r_range_bad = ({1'b0, s_axi_araddr} < SRAM_LO) || (r_end > SRAM_HI);
-    wire            r_type_bad  = (s_axi_arsize > 3'd2) || (s_axi_arburst == BURST_WRAP);
+    wire            r_type_bad  = (s_axi_arsize > 3'd2) || s_axi_arburst[1];
     wire [1:0]      r_resp_now  = r_range_bad ? RESP_DECERR
                                 : (r_type_bad  ? RESP_SLVERR : RESP_OKAY);
 
@@ -233,7 +233,7 @@ module axi_sram #(
     // 当前读拍地址与字索引
     wire [ADDR_W-1:0] r_beat_addr = (r_burst == BURST_FIXED) ? r_start
                                   : (r_start + ({{(ADDR_W-8){1'b0}}, r_beat} << r_size));
-    wire [AW-1:0]     r_word_idx  = r_beat_addr[AW+1:2];
+    wire [AW-1:0]     r_word_idx  = (r_beat_addr - BASE_ADDR) >> 2;
 
     // SRAM 同步读：只在 RS_REQ 拍取数，下一拍进 rdata_r（BRAM 风格）
     wire rd_en = (rs_cur == RS_REQ);

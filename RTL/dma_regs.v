@@ -131,7 +131,7 @@ module dma_regs #(
         begin
             f_legal = (a[ADDR_W-1:12] == BASE[ADDR_W-1:12]) &&
                       (a[11:7] == 5'b0) &&
-                      (a[6:4] <= 3'd5);
+                      (a[6:4] < NCH);
         end
     endfunction
 
@@ -178,7 +178,7 @@ module dma_regs #(
     wire [ADDR_W-1:0] r_next = (r_burst == BURST_FIXED) ? cur_addr : (cur_addr + r_step);
 
     wire aw_wrap_or_resv = (s_axi_awburst == BURST_WRAP) || (s_axi_awburst == 2'b11);
-    wire ar_wrap_or_resv = (s_axi_arburst == BURST_WRAP) || (s_axi_arburst == 2'b11);
+    wire ar_wrap_or_resv = s_axi_arburst[1] || (s_axi_arsize > 3'd2);
 
     // 写字节选通展开：wstrb[i] 门控字节 i
     wire [DATA_W-1:0] wstrb_full = {{8{s_axi_wstrb[3]}}, {8{s_axi_wstrb[2]}},
@@ -272,7 +272,7 @@ module dma_regs #(
                         w_len    <= s_axi_awlen;
                         w_size   <= s_axi_awsize;
                         w_burst  <= s_axi_awburst;
-                        w_err    <= aw_wrap_or_resv ||
+                        w_err    <= aw_wrap_or_resv || (s_axi_awsize > 3'd2) ||
                                     !f_wburst_ok(s_axi_awaddr, s_axi_awburst,
                                                  s_axi_awlen, s_axi_awsize);
                         bid_l    <= s_axi_awid;

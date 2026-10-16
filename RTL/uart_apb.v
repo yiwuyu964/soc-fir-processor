@@ -133,7 +133,7 @@ module uart_apb #(
                 rx_frame_err_sticky <= 1'b1;
 
             // PSEL 撤掉 → 本次传输结束，清掉保护标志
-            if (!psel)
+            if (!psel || !penable)
                 active <= 1'b0;
 
             if (psel && penable) begin
@@ -143,10 +143,12 @@ module uart_apb #(
                     pready <= 1'b1;
 
                     if (pwrite) begin
-                        if (paddr == ADDR_DATA) begin
-                            tx_data  <= pwdata[7:0];
-                            tx_start <= 1'b1;
-                            pslverr  <= tx_busy;      // 发送器忙 → 这次写入被拒
+                        if (paddr == ADDR_DATA && pstrb[0]) begin
+                            if (!tx_busy && !tx_start) begin
+                                tx_data  <= pwdata[7:0];
+                                tx_start <= 1'b1;
+                            end
+                            pslverr <= tx_busy || tx_start;
                         end
                         // 其它地址都是只读寄存器，写进去没有副作用
                     end
@@ -158,11 +160,11 @@ module uart_apb #(
                                            rx_fifo_full,
                                            ~rx_fifo_empty,
                                            tx_busy};
-                                rx_frame_err_sticky <= 1'b0;   // 读过就清
+                                rx_frame_err_sticky <= rx_frame_err; // 新错误优先
                             end
                             ADDR_RXDATA: begin
-                                prdata      <= {24'd0, rx_fifo_rdata};
-                                rx_fifo_ren <= 1'b1;           // 读一次弹一个
+                                prdata      <= rx_fifo_empty ? 32'd0 : {24'd0, rx_fifo_rdata};
+                                rx_fifo_ren <= !rx_fifo_empty;
                             end
                             default: prdata <= 32'd0;
                         endcase
@@ -171,6 +173,7 @@ module uart_apb #(
                 else begin
                     // -------- 主设备还没结束：保持 PREADY，不重复执行 --------
                     pready <= 1'b1;
+                    pslverr <= pslverr;
                 end
             end
         end
