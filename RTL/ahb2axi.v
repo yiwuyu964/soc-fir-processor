@@ -13,47 +13,55 @@
 //   ⚠️ HRESP 位宽：任务四 1.2 表里写 "HRESP out 2"，但 AHB-Lite 与
 //      Cortex-M0 DesignStart 的 HRESP 都是 1 位（0=OKAY，1=ERROR），
 //      这里按 1 位实现（与 M0 的 hresp_i 对齐）。
-//   ⚠️ HREADY：任务四只列 HREADY（出）。AHB 从设备标准里还有 HREADY（入）
-//      = 全系统"上一拍是否完成"。本桥是 M0 唯一 AHB 从设备，系统 HREADY
-//      就是自身 HREADY 的回环，故内部用 hready_sys = HREADY 代替。
+//   ⚠️ HREADY：任务四只列 HREADY（出）。本桥是 M0 唯一 AHB 从设备，
+//      系统 HREADY 就是自身 HREADY 的回环，故内部用 hready_sys = HREADY。
 //
 // ============================================================
 // 【AHB-Lite → AXI 翻译】
 // ============================================================
-//   写：地址期锁存 HADDR → AXI AW；数据期 HWDATA → AXI W；B 响应 → HRESP
-//   读：地址期锁存 HADDR → AXI AR；R 数据 → HRDATA；R 响应 → HRESP
-//
-//   HSIZE → AWSIZE/ARSIZE（两者编码相同，直接透传）：
-//     000=字节 / 001=半字 / 010=字（M0 只用这三种）
-//
-//   HBURST → AXI 突发（本桥统一映射成 INCR，长度封顶 16 拍，与赛题包桥一致）：
-//     SINGLE(000)        → INCR, LEN=0
-//     INCR(001)          → INCR, LEN=15（不定长，按 16 拍封顶）
-//     WRAP4/INCR4        → INCR, LEN=3
-//     WRAP8/INCR8        → INCR, LEN=7
-//     WRAP16/INCR16      → INCR, LEN=15
+//   HSIZE → AWSIZE/ARSIZE 直接透传（000=字节/001=半字/010=字）
+//   HBURST → 统一映射成 AXI INCR，长度封顶 16 拍：
+//     SINGLE(000)→LEN=0 / INCR(001)或INCR16或WRAP16→LEN=15
+//     WRAP4/INCR4→LEN=3 / WRAP8/INCR8→LEN=7
 //     （M0 实际只发 SINGLE 和短 INCR；WRAP 映射成等长 INCR，避免下游 SLVERR）
 //
-//   WSTRB（本模块最容易错的地方，由 HSIZE + 当前拍地址低两位生成）：
-//     字节   HSIZE=0 → 0001 << addr[1:0]
-//     半字   HSIZE=1 → 0011 << addr[1:0]   （半字地址 bit0 必须为 0）
-//     字     HSIZE>=2 → 1111
-//   写数据：HWDATA 直接透传。Cortex-M0 窄写会把数据复制到所有 byte lane，
-//   地址选中的 lane 上一定有正确数据，配合 WSTRB 只写有效 lane。
-//   读数据：R_DATA 直接透传。AXI 从设备窄读时数据本就落在地址选中的 lane 上，
-//   M0 按 HADDR[1:0] 取对应 lane，无需桥再做搬移。
+//   WSTRB：由 HSIZE + 该拍地址低两位生成（0001/0011 << addr[1:0]，字则 1111）。
+//   写数据 HWDATA、读数据 R_DATA 均直接透传，不做 lane 搬移。
+//
+// ============================================================
+// 【AHB 流水线时序】（本模块历史 bug 所在，2025 review 重写）
+// ============================================================
+//   AHB 是【流水线】的：地址相位与上一拍的数据相位重叠，背靠背传输之间
+//   【没有 IDLE 空档】。早期版本要求"两笔之间必须有 IDLE"，真实 M0 一上电
+//   连读 0x0/0x4 两个向量就丢第二笔 → 复位向量读成 0 → HardFault。
+//
+//   本版本按 ARM 官方 ahb2axi4_ahb.v 的语义重写：
+//     · 新突发 = HSEL && HREADY && (HTRANS == NONSEQ)
+//       （HREADY=1 本身就代表"上一拍已完成"，不额外要求状态机回 IDLE）
+//
+//     · 读：一拍 R 拍 ↔ 一拍 AHB 数据相位（HREADY = R 握手完成），
+//           读数据相位与下一拍的地址相位天然重合。
+//
+//     · 写：AHB 的写数据相位紧跟在地址相位后【一拍】，而 AXI 的 W 通道要等
+//           AW 握手后才能发（AW 有一拍锁存 + 握手延迟）。若直接把 HWDATA
+//           接到 W 通道，采样会晚一拍 → 突发写整体错位（历史上实测到
+//           "该写 a0..a3，结果写成 a1,a3,0,0"）。
+//           因此这里加【一拍写数据缓冲】：在 AHB 数据相位把 HWDATA 与
+//           WSTRB 一起抓进 wbuf，AHB 该拍即可完成；W 拍再按 AXI 侧节奏排出。
+//           HREADY 在写时 = "缓冲空"，AXI 慢时自动把 AHB 顶住。
+//           等 B 期间 HREADY=0，保证 B/HRESP 不会被下一笔突发覆盖。
+//
+//     · HRESP：按 AHB 规范做【两拍错误响应】——第一拍 HREADY=0 + HRESP=1，
+//              第二拍 HREADY=1 + HRESP=1。
 //
 // ============================================================
 // 【VALID/READY 铁律】
 // ============================================================
-//   AXI 主口的 VALID 都是寄存器输出，握手完成前不撤销；READY 独立于 VALID。
-//   桥内部无组合环（地址锁存、数据/响应都由寄存器打拍）。
+//   AXI 主口的 VALID 只依赖"已锁存/已捕获"的状态，握手完成前不撤销；
+//   READY 独立于 VALID。内部无组合环。
 //
 // ============================================================
-// 【验证】TB/tb_ahb2axi.v
-// ============================================================
-//   三种 HSIZE 的读写落到正确 byte lane / INCR 突发地址递增 / WLAST、RLAST /
-//   AWID/ARID=0 / 错误贯通（AXI SLVERR → AHB HRESP=1）/ 长时间随机无死锁。
+// 【验证】TB/tb_ahb2axi.v + 顶层 TB/tb_soc.v
 // ============================================================
 `timescale 1ns/1ps
 
@@ -114,7 +122,6 @@ module ahb2axi #(
     // 0. 常量
     // ============================================================
     localparam HTRANS_IDLE   = 2'b00;
-    localparam HTRANS_BUSY   = 2'b01;
     localparam HTRANS_NONSEQ = 2'b10;
     localparam HTRANS_SEQ    = 2'b11;
 
@@ -130,269 +137,173 @@ module ahb2axi #(
     localparam AXBURST_INCR  = 2'b01;
 
     // ============================================================
-    // 1. 内部寄存器 / 线网（全部先声明，供下方使用）
+    // 1. 状态（全部先声明）
     // ============================================================
-    // AHB 地址期状态机
-    localparam STA_IDLE = 1'b0;
-    localparam STA_ADDR = 1'b1;
-    reg sta_cur, sta_next;
+    // 当前突发参数
+    reg  [ADDR_W-1:0] b_addr;
+    reg  [2:0]        b_size;
+    reg  [7:0]        b_len;
+    reg               b_write;
+    reg               b_incr;      // 1 = 未定义长度 INCR（每拍拆成一笔 AXI SINGLE）
+    reg               act;
+    reg               aw_done;
+    reg               ar_done;
+    reg               b_wait;
+    reg  [1:0]        b_resp;
 
-    // AHB 数据期状态机
-    localparam STD_IDLE  = 2'd0;
-    localparam STD_WDATA = 2'd1;
-    localparam STD_WRESP = 2'd2;
-    localparam STD_RDATA = 2'd3;
-    reg [1:0] std_cur, std_next;
+    // 读：已收到的 R 拍数
+    reg  [7:0]        rcnt;
 
-    // AXI 写地址 AW
-    localparam AW_IDLE = 2'd0;
-    localparam AW_REQ  = 2'd1;
-    localparam AW_DONE = 2'd2;
-    reg [1:0] aw_cur, aw_next;
+    // 写数据缓冲（一拍）：AHB 数据相位 → AXI W 通道
+    reg               wbuf_v;
+    reg  [DATA_W-1:0] wbuf_data;
+    reg  [DATA_W/8-1:0] wbuf_strb;
+    reg               wbuf_last;
+    reg  [7:0]        wcap;        // 已捕获的 W 拍数
 
-    // AXI 写数据/响应 W/B
-    localparam WB_IDLE  = 2'd0;
-    localparam WB_DATA  = 2'd1;
-    localparam WB_BURST = 2'd2;   // 拍间空档：WVALID 拉低一拍，让主设备放下一拍数据
-    localparam WB_RESP  = 2'd3;
-    reg [1:0] wb_cur, wb_next;
+    // 写数据相位标志：突发地址相位被接受后的下一拍起，总线上就有"某一拍的写数据"
+    reg               wdata_pend;
 
-    // AXI 读地址 AR
-    localparam AR_IDLE = 2'd0;
-    localparam AR_REQ  = 2'd1;
-    localparam AR_DONE = 2'd2;
-    reg [1:0] ar_cur, ar_next;
-
-    // AXI 读数据 R
-    localparam R_IDLE  = 2'd0;
-    localparam R_DATA  = 2'd1;
-    localparam R_BURST = 2'd2;   // 拍间空档：RREADY 拉低一拍，HREADY 才会在拍间回落
-    reg [1:0] r_cur, r_next;
-
-    // 突发参数锁存
-    reg [ADDR_W-1:0] b_addr;
-    reg [2:0]        b_size;
-    reg [7:0]        b_len;
-
-    // 拍计数
-    reg [7:0] w_beat;
-    reg [7:0] r_beat;
-
-    // HREADY / HRESP
-    reg        hready_r;
-    reg        hresp_r;
-    reg        w_ack_reg;
-
-    // 握手与标志线网
-    wire                hready_sys;
-    wire                start_burst;
-    wire                w_data_req;
-    wire                r_data_req;
-    wire                w_ack;
-    wire                b_ack;
-    wire                r_ack;
-    wire [ADDR_W-1:0]   w_addr;
-    wire                r_done;
-    wire                b_err;
-    wire                r_err;
+    // HRESP 两拍错误响应计数
+    reg  [1:0]        err_cnt;
 
     // ============================================================
     // 2. 基础线网
     // ============================================================
-    // 单从设备：系统 HREADY = 自身 HREADY 回环
-    assign hready_sys = hready_r;
+    wire hready_sys = HREADY;                  // 单从设备：系统 HREADY 即自身
 
-    // 当前 AXI 事务在本拍完成（AHB 数据相位随之完成）
-    wire txn_done_r = (std_cur == STD_RDATA) && r_ack && (r_beat == b_len);
-    wire txn_done_w = (std_cur == STD_WRESP) && b_ack;
-    wire txn_done   = txn_done_r || txn_done_w;
+    wire aw_hs = m_axi_awvalid && m_axi_awready;
+    wire w_hs  = m_axi_wvalid  && m_axi_wready;
+    wire b_hs  = m_axi_bvalid  && m_axi_bready;
+    wire ar_hs = m_axi_arvalid && m_axi_arready;
+    wire r_hs  = m_axi_rvalid  && m_axi_rready;
 
-    // 链式启动：本拍事务完成，且 AHB 已经摆出下一笔 NONSEQ
-    //   ⚠️ 真实 M0 的 AHB 是【流水线】的：背靠背传输之间没有 IDLE 空档，
-    //      下一笔地址在上一笔的数据相位期间就摆出来了。必须在"完成的同一拍"
-    //      把它收进来，否则会丢事务（早期版本要求两笔之间必须有 IDLE，见 review）。
-    wire chain = HSEL && (HTRANS == HTRANS_NONSEQ) && txn_done;
+    // 本拍 AHB 给的是一个"写拍"（地址相位）
+    // 写数据相位：突发地址相位被接受后的下一拍起，直到最后一拍数据被抓走
+    // 捕获一个 W 拍（抓到 = 本拍 AHB 数据相位完成）
+    wire w_cap = wdata_pend && act && b_write && !wbuf_v;
 
-    // 突发起点：
-    //   · 空闲：HREADY=1（系统就绪）且 AHB 给出 NONSEQ
-    //   · 忙  ：本拍事务完成且 AHB 已摆出下一笔 NONSEQ（链式）
-    assign start_burst = HSEL && (HTRANS == HTRANS_NONSEQ) &&
-                         ((sta_cur == STA_IDLE) ? hready_sys : txn_done);
+    // 当前待捕获那一拍的字节地址（用于算 WSTRB）
+    wire [ADDR_W-1:0] beat_off  = {{(ADDR_W-8){1'b0}}, wcap} << b_size;
+    wire [ADDR_W-1:0] beat_addr = b_addr + beat_off;
 
-    // 突发首拍的方向请求（单拍脉冲，方向用 HWRITE 现场值）
-    assign w_data_req = HWRITE && start_burst;
-    assign r_data_req = !HWRITE && start_burst;
-
-    // AXI 握手
-    assign w_ack = m_axi_wvalid && m_axi_wready;
-    assign b_ack = m_axi_bready && m_axi_bvalid;
-    assign r_ack = m_axi_rready && m_axi_rvalid;
-
-    // 当前 W 拍的地址（AW 起始地址 + 已握手拍数 × 步长），用于算 WSTRB
-    assign w_addr = b_addr + ({{(ADDR_W-8){1'b0}}, w_beat} << b_size);
-
-    // 读突发结束标志（最后一拍握手）
-    assign r_done      = r_ack && (r_beat == b_len);
-
-    // 响应错误
-    assign b_err = b_ack && m_axi_bresp[1];
-    assign r_err = r_ack && m_axi_rresp[1];
+    // 新事务：
+    //   · NONSEQ            —— 一笔新突发 / 单拍的起点
+    //   · 未定义长度 INCR 的后续 SEQ 拍 —— 每拍各自成为一笔 AXI SINGLE
+    //   ⚠️ AHB 的 INCR 是"长度未定义"突发，长度由主机何时停止决定，桥无法预知。
+    //      早期版本把 INCR 一律映射成 AWLEN=15（16 拍），提前把长度发了出去，
+    //      而从设备会一直等第 16 拍 W → 写突发永远完不成。
+    //      Cortex-M0 压 8 字异常帧（STMDB，正是 INCR 突发）就因此被写坏成
+    //      0xFFFFFFFF，帧里 PC/xPSR 非法 → HardFault → 跳到 Default_Handler 卡死。
+    //      所以 INCR 只能拆成 SINGLE，绝不能猜长度。
+    wire new_burst = HSEL && hready_sys &&
+                     ((HTRANS == HTRANS_NONSEQ) ||
+                      (b_incr && (HTRANS == HTRANS_SEQ) && !act));
 
     // ============================================================
-    // 3. 组合逻辑 · 次态
-    // ============================================================
-    // ---- AHB 地址期状态机 ----
-    always @(*) begin
-        sta_next = sta_cur;
-        case (sta_cur)
-            STA_IDLE : if (start_burst)              sta_next = STA_ADDR;
-            STA_ADDR : if (HTRANS == HTRANS_IDLE)    sta_next = STA_IDLE;
-            default  :                               sta_next = STA_IDLE;
-        endcase
-    end
-
-    // ---- AHB 数据期状态机 ----
-    always @(*) begin
-        std_next = std_cur;
-        case (std_cur)
-            STD_IDLE: begin
-                if (w_data_req)                 std_next = STD_WDATA;
-                else if (r_data_req)            std_next = STD_RDATA;
-            end
-            STD_WDATA: begin
-                if (w_ack && (w_beat == b_len)) std_next = STD_WRESP;
-            end
-            STD_WRESP: begin
-                // b_ack 即本拍完成；若 AHB 已摆出下一笔（chain），直接按新方向续跑
-                if (b_ack)                      std_next = chain ? (HWRITE ? STD_WDATA : STD_RDATA)
-                                                                 : STD_IDLE;
-            end
-            STD_RDATA: begin
-                if (r_ack && (r_beat == b_len)) std_next = chain ? (HWRITE ? STD_WDATA : STD_RDATA)
-                                                                 : STD_IDLE;
-            end
-            default: std_next = STD_IDLE;
-        endcase
-    end
-
-    // ---- AXI AW 状态机 ----
-    always @(*) begin
-        aw_next = aw_cur;
-        case (aw_cur)
-            AW_IDLE: if (w_data_req)      aw_next = AW_REQ;
-            AW_REQ : if (m_axi_awready)   aw_next = AW_DONE;
-            AW_DONE: if (b_ack)           aw_next = (chain &&  HWRITE) ? AW_REQ : AW_IDLE;
-            default:                      aw_next = AW_IDLE;
-        endcase
-    end
-
-    // ---- AXI W/B 状态机 ----
-    always @(*) begin
-        wb_next = wb_cur;
-        case (wb_cur)
-            WB_IDLE: if (w_data_req)               wb_next = WB_DATA;
-            WB_DATA: if (w_ack) begin
-                         if (w_beat >= b_len)      wb_next = WB_RESP;
-                         else                      wb_next = WB_BURST;
-                     end
-            WB_BURST:                              wb_next = WB_DATA;
-            WB_RESP: if (b_ack) begin
-                         if (chain &&  HWRITE)     wb_next = WB_DATA;
-                         else                      wb_next = WB_IDLE;
-                     end
-            default:                               wb_next = WB_IDLE;
-        endcase
-    end
-
-    // ---- AXI AR 状态机 ----
-    always @(*) begin
-        ar_next = ar_cur;
-        case (ar_cur)
-            AR_IDLE: if (r_data_req)      ar_next = AR_REQ;
-            AR_REQ : if (m_axi_arready)   ar_next = AR_DONE;
-            AR_DONE: if (r_done)          ar_next = (chain && !HWRITE) ? AR_REQ : AR_IDLE;
-            default:                      ar_next = AR_IDLE;
-        endcase
-    end
-
-    // ---- AXI R 状态机 ----
-    always @(*) begin
-        r_next = r_cur;
-        case (r_cur)
-            R_IDLE : if (r_data_req)           r_next = R_DATA;
-            R_DATA : if (r_ack) begin
-                         if (r_beat >= b_len)  r_next = (chain && !HWRITE) ? R_DATA : R_IDLE;
-                         else                  r_next = R_BURST;
-                     end
-            R_BURST:                           r_next = R_DATA;
-            default:                           r_next = R_IDLE;
-        endcase
-    end
-
-    // ---- HREADY ----
-    always @(*) begin
-        if (!rst_n)                    hready_r = 1'b1;
-        else if (std_cur == STD_WDATA) hready_r = w_ack_reg;   // 每拍 W 握手后放行
-        else if (std_cur == STD_WRESP) hready_r = 1'b0;        // 等 B 响应（错误贯通）
-        else if (std_cur == STD_RDATA) hready_r = r_ack;       // R 握手后放行
-        else                           hready_r = 1'b1;
-    end
-
-    // ============================================================
-    // 4. 时序逻辑 · 状态寄存器与锁存
+    // 3. 时序：事务参数、W 缓冲、拍计数、B 响应
     // ============================================================
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            sta_cur   <= STA_IDLE;
             b_addr    <= {ADDR_W{1'b0}};
             b_size    <= 3'd2;
             b_len     <= 8'd0;
-            std_cur   <= STD_IDLE;
-            aw_cur    <= AW_IDLE;
-            wb_cur    <= WB_IDLE;
-            w_beat    <= 8'd0;
-            ar_cur    <= AR_IDLE;
-            r_cur     <= R_IDLE;
-            r_beat    <= 8'd0;
-            hresp_r   <= 1'b0;
-            w_ack_reg <= 1'b0;
+            b_write   <= 1'b0;
+            b_incr    <= 1'b0;
+            act       <= 1'b0;
+            aw_done   <= 1'b0;
+            ar_done   <= 1'b0;
+            b_wait    <= 1'b0;
+            b_resp    <= 2'b00;
+            rcnt      <= 8'd0;
+            wbuf_v    <= 1'b0;
+            wbuf_data <= {DATA_W{1'b0}};
+            wbuf_strb <= {DATA_W/8{1'b0}};
+            wbuf_last <= 1'b0;
+            wcap      <= 8'd0;
+            wdata_pend<= 1'b0;
+            err_cnt   <= 2'd0;
         end
         else begin
-            sta_cur <= sta_next;
-            std_cur <= std_next;
-            aw_cur  <= aw_next;
-            wb_cur  <= wb_next;
-            ar_cur  <= ar_next;
-            r_cur   <= r_next;
+            // ---- 写数据相位标志 ----
+            //   突发地址相位被接受的下一拍起，总线上就挂着写数据；直到最后一拍抓完
+            if (w_cap && (wcap >= b_len)) wdata_pend <= 1'b0;
+            if (new_burst && HWRITE)      wdata_pend <= 1'b1;
 
-            // 突发参数锁存（仅突发首拍）
-            if (start_burst) begin
+            // ---- W 缓冲排出 ----
+            if (w_hs) wbuf_v <= 1'b0;
+
+            // ---- 错误响应：至少两拍，并保持到下一笔突发开始 ----
+            //   （HRESP 属于"刚完成的那笔传输"，下一笔到来前主机随时可能采样）
+            if (new_burst) err_cnt <= 2'd0;
+
+            if (new_burst) begin
+                // 新突发（可能紧跟上一笔最后一拍，中间没有 IDLE）
                 b_addr  <= HADDR;
                 b_size  <= HSIZE;
-                b_len   <= len_of(HBURST);
+                b_incr  <= (HBURST == HBURST_INCR);
+                b_len   <= (HBURST == HBURST_INCR) ? 8'd0 : len_of(HBURST);
+                b_write <= HWRITE;
+                act     <= 1'b1;
+                aw_done <= 1'b0;
+                ar_done <= 1'b0;
+                b_wait  <= 1'b0;
+                rcnt    <= 8'd0;
+                wcap    <= 8'd0;
             end
+            else if (act) begin
+                if (b_write) begin
+                    if (aw_hs) aw_done <= 1'b1;
 
-            // W 拍计数：事务起点归 0（含链式续跑），握手一次 +1
-            if (start_burst)                       w_beat <= 8'd0;
-            else if (w_ack)                        w_beat <= w_beat + 8'd1;
+                    // 在 AHB 数据相位抓走 HWDATA + WSTRB
+                    if (w_cap) begin
+                        wbuf_v    <= 1'b1;
+                        wbuf_data <= HWDATA;
+                        wbuf_strb <= wstrb_of(b_size, beat_addr[1:0]);
+                        wbuf_last <= (wcap >= b_len);
+                        if (wcap < b_len) wcap <= wcap + 8'd1;
+                        else              b_wait <= 1'b1;   // 最后一拍已抓完 → 等 B
+                    end
 
-            // R 拍计数：事务起点归 0（含链式续跑），握手一次 +1
-            if (start_burst)                       r_beat <= 8'd0;
-            else if (r_ack)                        r_beat <= r_beat + 8'd1;
-
-            // W 握手延迟一拍（写数据期完成时序）
-            w_ack_reg <= w_ack;
-
-            // HRESP：写响应错误 / 读响应错误 贯通
-            if (std_cur == STD_WRESP && b_ack)      hresp_r <= b_err;
-            else if (std_cur == STD_RDATA && r_ack) hresp_r <= r_err;
+                    if (b_hs) begin
+                        b_resp <= m_axi_bresp;
+                        if (m_axi_bresp[1]) err_cnt <= 2'd2;   // 两拍错误响应
+                        act    <= 1'b0;
+                        b_wait <= 1'b0;
+                    end
+                end
+                else begin
+                    if (ar_hs) ar_done <= 1'b1;
+                    if (r_hs) begin
+                        if (m_axi_rresp[1]) err_cnt <= 2'd2;
+                        if (rcnt < b_len) rcnt <= rcnt + 8'd1;
+                        else              act  <= 1'b0;         // 最后一拍 → 突发结束
+                    end
+                end
+            end
         end
     end
 
     // ============================================================
-    // 5. 输出
+    // 4. HREADY / HRESP / HRDATA
     // ============================================================
-    // ---- HBURST → AXI AWLEN（统一 INCR，长度封顶 16）----
+    assign HRESP = (err_cnt != 2'd0);
+
+    assign HREADY = (err_cnt != 2'd0) ? 1'b1                   // 错误已挂起：本拍可完成
+                  : !act              ? 1'b1                   // 空闲：随时可收地址
+                  // 等 B：末拍要等 B 才能把 BRESP 报成 HRESP。
+                  //   无错 → 本拍即完成；有错 → 本拍不给 HREADY，改走上面两拍错误响应
+                  :  b_wait           ? (b_hs && !m_axi_bresp[1])
+                  // 写：非末拍靠"缓冲空"推进；末拍必须等 B 才知道有没有错，
+                  //     因此末拍不给 HREADY，由上面的 b_wait 分支收尾
+                  :  b_write          ? ((wcap < b_len) && !wbuf_v)
+                  :                     r_hs;                  // 读：R 拍即数据相位
+
+    assign HRDATA = m_axi_rdata;
+
+    // ============================================================
+    // 5. HBURST → AWLEN/ARLEN（统一 INCR）
+    // ============================================================
     function [7:0] len_of;
         input [2:0] burst;
         begin
@@ -405,7 +316,9 @@ module ahb2axi #(
         end
     endfunction
 
-    // ---- WSTRB：HSIZE + 当前拍地址低两位 ----
+    // ============================================================
+    // 6. WSTRB：HSIZE + 该拍地址低两位
+    // ============================================================
     function [DATA_W/8-1:0] wstrb_of;
         input [2:0] sz;
         input [1:0] off;
@@ -418,35 +331,35 @@ module ahb2axi #(
         end
     endfunction
 
-    // ---- AHB 输出 ----
-    assign HREADY = hready_r;
-    assign HRESP  = hresp_r;
-    assign HRDATA = m_axi_rdata;   // AXI 窄读数据已在地址选中 lane，透传即可
-
-    // ---- AXI 写地址 ----
+    // ============================================================
+    // 7. AXI 主口输出
+    // ============================================================
+    // ---- 写地址 ----
     assign m_axi_awid    = {ID_W{1'b0}};
     assign m_axi_awaddr  = b_addr;
     assign m_axi_awlen   = b_len;
     assign m_axi_awsize  = b_size;
     assign m_axi_awburst = AXBURST_INCR;
-    assign m_axi_awvalid = (aw_cur == AW_REQ);
+    assign m_axi_awvalid = act && b_write && !aw_done;
 
-    // ---- AXI 写数据/响应 ----
-    assign m_axi_wdata   = HWDATA;
-    assign m_axi_wstrb   = wstrb_of(b_size, w_addr[1:0]);
-    assign m_axi_wlast   = (wb_cur == WB_DATA) && (w_beat == b_len);
-    assign m_axi_wvalid  = (wb_cur == WB_DATA);
-    assign m_axi_bready  = (wb_cur == WB_RESP);
+    // ---- 写数据（来自缓冲，与 AW 握手延迟无关）----
+    assign m_axi_wdata   = wbuf_data;
+    assign m_axi_wstrb   = wbuf_strb;
+    assign m_axi_wlast   = wbuf_last;
+    assign m_axi_wvalid  = wbuf_v;
 
-    // ---- AXI 读地址 ----
+    // ---- 写响应 ----
+    assign m_axi_bready  = act && b_write && b_wait;
+
+    // ---- 读地址 ----
     assign m_axi_arid    = {ID_W{1'b0}};
     assign m_axi_araddr  = b_addr;
     assign m_axi_arlen   = b_len;
     assign m_axi_arsize  = b_size;
     assign m_axi_arburst = AXBURST_INCR;
-    assign m_axi_arvalid = (ar_cur == AR_REQ);
+    assign m_axi_arvalid = act && !b_write && !ar_done;
 
-    // ---- AXI 读数据 ----
-    assign m_axi_rready  = (r_cur == R_DATA);
+    // ---- 读数据 ----
+    assign m_axi_rready  = act && !b_write;
 
 endmodule

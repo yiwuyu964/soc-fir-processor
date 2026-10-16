@@ -148,21 +148,27 @@ module tb_ahb2axi;
         input [8:0]  base;
         integer i;
         begin
-            for (i = 0; i < nbeats; i = i + 1) begin
+            // 第 0 拍的地址相位。AHB 是流水的：地址相位与上一拍的数据相位重叠，
+            // 背靠背之间没有 IDLE 空档。因此每拍走过一个 HREADY=1 就立刻摆出
+            // 下一拍地址，同时给出本拍的写数据（下一拍的数据相位要用）。
+            @(negedge clk);
+            HADDR  = addr;
+            HTRANS = 2'b10;                 // NONSEQ
+            HWRITE = 1'b1;
+            HSIZE  = size;
+            HBURST = burst;
+            HWDATA = 32'h0;
+            for (i = 0; i <= nbeats; i = i + 1) begin
+                @(posedge clk);
+                while (!HREADY) @(posedge clk);   // 本步被接受
                 @(negedge clk);
-                HADDR  = addr + i * (1 << size);
-                HTRANS = (i == 0) ? 2'b10 : 2'b11;
-                HWRITE = 1'b1;
-                HSIZE  = size;
-                HBURST = burst;
-                HWDATA = wmem[base + i];
-                @(posedge clk);                 // 地址期（桥在此拍采样地址，HREADY 尚为 1）
-                // 最后一拍之后没有后续传输 → 地址相位结束即转 IDLE。
-                // （AHB 流水线要求：地址相位之后必须给出下一笔地址或 IDLE；
-                //   一直保持着同一笔 NONSEQ 会被下游当作"重复请求同一笔"）
-                if (i == nbeats - 1) HTRANS = 2'b00;
-                @(posedge clk);                 // 桥已拉低 HREADY
-                while (!HREADY) @(posedge clk); // 数据期完成
+                if (i < nbeats) HWDATA = wmem[base + i];         // 第 i 拍的写数据
+                if (i + 1 < nbeats) begin
+                    HADDR  = addr + (i + 1) * (1 << size);       // 下一拍地址
+                    HTRANS = 2'b11;                              // SEQ
+                end else begin
+                    HTRANS = 2'b00;                              // 没有下一拍 → IDLE
+                end
             end
             @(negedge clk);
             HTRANS = 2'b00; HWDATA = 32'h0;
@@ -176,21 +182,36 @@ module tb_ahb2axi;
         input [7:0]  nbeats;
         input [8:0]  base;
         integer i;
+        integer nb;
         begin
-            for (i = 0; i < nbeats; i = i + 1) begin
+            // 第 0 拍地址相位
+            @(negedge clk);
+            HADDR  = addr;
+            HTRANS = 2'b10;                     // NONSEQ
+            HWRITE = 1'b0;
+            HSIZE  = size;
+            HBURST = burst;
+            @(posedge clk);                     // 地址相位被接受（HREADY 此时为 1）
+            @(negedge clk);
+            if (nbeats > 1) begin
+                HADDR  = addr + (1 << size);    // 下一拍地址（与数据相位重叠）
+                HTRANS = 2'b11;
+            end else HTRANS = 2'b00;
+            // 流水线：每个 HREADY=1 的拍收一拍读数据，同时把地址推进到下一拍。
+            // 读数据是【每拍一个】的，采样不能比它慢，否则会吞掉中间拍。
+            nb = 0;
+            while (nb < nbeats) begin
+                @(posedge clk);
+                if (HREADY) begin
+                    rmem[base + nb]      = HRDATA;
+                    rresp_mem[base + nb] = HRESP;
+                    nb = nb + 1;
+                end
                 @(negedge clk);
-                HADDR  = addr + i * (1 << size);
-                HTRANS = (i == 0) ? 2'b10 : 2'b11;
-                HWRITE = 1'b0;
-                HSIZE  = size;
-                HBURST = burst;
-                @(posedge clk);                 // 地址期
-                // 最后一拍之后转 IDLE（理由同 ahb_write）
-                if (i == nbeats - 1) HTRANS = 2'b00;
-                @(posedge clk);                 // 桥已拉低 HREADY
-                while (!HREADY) @(posedge clk); // 数据期完成
-                rmem[base + i]      = HRDATA;
-                rresp_mem[base + i] = HRESP;
+                if (nb + 1 < nbeats) begin
+                    HADDR  = addr + (nb + 1) * (1 << size);
+                    HTRANS = 2'b11;
+                end else HTRANS = 2'b00;
             end
             @(negedge clk);
             HTRANS = 2'b00;
