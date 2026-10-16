@@ -62,17 +62,17 @@ module sync_fifo #(
             case ({wen && !full, ren && !empty})
                 2'b10: begin                       // 只写
                     mem[wr_ptr] <= wdata;
-                    wr_ptr <= wr_ptr + 1'b1;
+                    wr_ptr <= (wr_ptr == DEPTH-1) ? 0 : wr_ptr + 1'b1;
                     cnt    <= cnt + 1'b1;
                 end
                 2'b01: begin                       // 只读
-                    rd_ptr <= rd_ptr + 1'b1;
+                    rd_ptr <= (rd_ptr == DEPTH-1) ? 0 : rd_ptr + 1'b1;
                     cnt    <= cnt - 1'b1;
                 end
                 2'b11: begin                       // 同时读写
                     mem[wr_ptr] <= wdata;
-                    wr_ptr <= wr_ptr + 1'b1;
-                    rd_ptr <= rd_ptr + 1'b1;
+                    wr_ptr <= (wr_ptr == DEPTH-1) ? 0 : wr_ptr + 1'b1;
+                    rd_ptr <= (rd_ptr == DEPTH-1) ? 0 : rd_ptr + 1'b1;
                     // cnt 不变
                 end
                 default: ;                          // 什么都不做

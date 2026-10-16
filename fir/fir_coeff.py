@@ -74,9 +74,9 @@ def design_lowpass(ntap, fc, window="hamming"):
     window: 窗函数名
 
     理想低通冲激响应（归一化 sinc）：
-        h_ideal[n] = 2·fc·sinc(2·fc·(n - M/2))
-                   = sin(2π·fc·(n - M/2)) / (π·(n - M/2))     (n ≠ M/2)
-                   = 2·fc                                       (n = M/2)
+        h_ideal[n] = fc·sinc(fc·(n - M/2))
+                   = sin(π·fc·(n - M/2)) / (π·(n - M/2))     (n ≠ M/2)
+                   = fc                                       (n = M/2)
     再乘窗、再归一化使 Σh = 1.0（直流增益 = 1）。
     """
     if ntap % 2 == 0:
@@ -92,9 +92,9 @@ def design_lowpass(ntap, fc, window="hamming"):
         for n in range(ntap):
             d = n - M / 2.0
             if d == 0:
-                s = 2.0 * fc
+                s = fc
             else:
-                s = math.sin(2 * math.pi * fc * d) / (math.pi * d)
+                s = math.sin(math.pi * fc * d) / (math.pi * d)
             h.append(s * w[n])
 
     total = sum(h)
@@ -211,7 +211,7 @@ def read_hex(path, bits=16):
             if not line or line.startswith("//"):
                 continue
             if any(c in line.lower() for c in "xz"):
-                continue                       # 跳过未初始化项（xxxx）
+                raise ValueError("Uninitialized hexadecimal sample in %s: %s" % (path, line))
             v = int(line, 16) & mask
             if v & sign:
                 v -= (1 << bits)
@@ -228,7 +228,8 @@ def write_coeffs_vh(path, coeffs, cw=16):
         "// ============================================================",
     ]
     for k, v in enumerate(coeffs):
-        lines.append("localparam signed [%d:0] H%d = 16'sd%d;" % (cw - 1, k, v))
+        literal = ("-" if v < 0 else "") + "%d'sd%d" % (cw, abs(v))
+        lines.append("localparam signed [%d:0] H%d = %s;" % (cw - 1, k, literal))
     with open(path, "w", newline="\n", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
 
@@ -271,6 +272,8 @@ def main():
 
     outdir = args.outdir or os.path.dirname(os.path.abspath(__file__))
     ntap, fc, nsamp = args.taps, args.cutoff, args.nsamp
+    if ntap < 2 or nsamp < 1 or not 0 < fc < 1:
+        ap.error("require taps >= 2, nsamp >= 1 and 0 < cutoff < 1")
 
     # ---- 设计 + 量化系数 ----
     h = design_lowpass(ntap, fc, args.window)
@@ -297,7 +300,10 @@ def main():
         print("\nRTL 导出 %d 个，黄金模型期望 %d 个" % (len(got), len(exp)))
         if len(got) > 1:
             got = got[1:]                        # 跳过流水线前导 0（契约 E.6）
-        n = min(len(got), len(exp))
+        if len(got) != len(exp):
+            print("FAIL: sample count mismatch: %d != %d" % (len(got), len(exp)))
+            sys.exit(1)
+        n = len(exp)
         bad = [(i, got[i], exp[i]) for i in range(n) if got[i] != exp[i]]
         if not bad:
             print("\n===== PASS：前 %d 个样本与黄金模型逐位一致 =====" % n)
@@ -305,6 +311,8 @@ def main():
             print("\n===== FAIL：%d / %d 个样本不一致 =====" % (len(bad), n))
             for i, g, e in bad[:10]:
                 print("   样本 %3d：RTL = %6d，期望 = %6d" % (i, g, e))
+        if bad:
+            sys.exit(1)
         return
 
     # ---- 生成模式 ----
@@ -325,6 +333,7 @@ def main():
           % ("✅ 达标" if ok else "❌ 不达标"))
 
     # ---- 写文件 ----
+    os.makedirs(outdir, exist_ok=True)
     write_coeffs_vh(os.path.join(outdir, "coeffs.vh"), coeffs)
     write_hex(os.path.join(outdir, "coeffs.hex"), coeffs)
     write_hex(os.path.join(outdir, "stim.hex"), x_int)

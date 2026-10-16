@@ -37,7 +37,8 @@ module axi_ic #(
     parameter ADDR_W   = 32,
     parameter ID_W     = 4,
     parameter N_MASTER = 2,            // 从口数量（主设备数）
-    parameter N_SLAVE  = 5             // 主口数量（从设备数）
+    parameter N_SLAVE  = 5,            // 主口数量（从设备数）
+    parameter M2_RESERVED = 0          // SoC leaves m2 unconnected: use DECERR
 )(
     input  wire clk,
     input  wire rst_n,
@@ -361,7 +362,7 @@ module axi_ic #(
         input [ADDR_W-1:0] a;
         begin
             if      (a[ADDR_W-1:16] == 16'h0000)                     f_decode = 3'd3;
-            else if (a[ADDR_W-1:16] == 16'h2000)                     f_decode = 3'd2;
+            else if (a[ADDR_W-1:16] == 16'h2000)                     f_decode = M2_RESERVED ? 3'd5 : 3'd2;
             else if (a[ADDR_W-1:12] == 20'h40000)                    f_decode = 3'd0;
             else if (a[ADDR_W-1:12] == 20'h40001)                    f_decode = 3'd1;
             else if (a[ADDR_W-1:16] == 16'h4000 && a[15:12] >= 4'd2) f_decode = 3'd4;
@@ -628,7 +629,7 @@ module axi_ic #(
     reg [7:0]      def_w_beat, def_w_len;
     reg          def_bvalid;
 
-    assign m_awready[5] = !def_w_busy;
+    assign m_awready[5] = !def_w_busy && !def_bvalid;
     assign m_wready[5]  = def_w_busy;
 
     always @(posedge clk or negedge rst_n) begin

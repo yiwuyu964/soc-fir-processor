@@ -44,6 +44,14 @@ SECTIONS
         _etext = .;
     } > SRAM
 
+    ASSERT(. <= 0xE00, "Code overlaps reserved smoke-test memory")
+    .test_sram 0xE00 (NOLOAD) :
+    {
+        _test_sram_start = .;
+        . = . + 0x100;
+    } > SRAM
+    .mailbox 0xF00 (NOLOAD) : { . = . + 0x100; } > SRAM
+
     /* ---- 已初始化数据 ---- */
     .data : ALIGN(4)
     {
@@ -66,7 +74,8 @@ SECTIONS
     } > SRAM
 
     /* ---- 给栈留个符号性的位置（实际不占用输出段）---- */
-    .stack (NOLOAD) : ALIGN(8)
+    ASSERT(. <= _estack - 0x4000, "Data overlaps stack")
+    .stack (_estack - 0x4000) (NOLOAD) :
     {
         . = . + 0x4000;          /* 16KB 栈 */
         . = ALIGN(8);

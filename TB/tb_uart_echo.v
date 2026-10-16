@@ -26,9 +26,9 @@ module tb_uart_echo;
     localparam BIT_CNT  = CLK_FREQ / BAUD;      // = 20
 
     // UART 寄存器地址
-    localparam ADDR_DATA   = 32'h000;
-    localparam ADDR_STATUS = 32'h004;
-    localparam ADDR_RXDATA = 32'h008;
+    localparam ADDR_DATA   = 32'h4000_2000;
+    localparam ADDR_STATUS = 32'h4000_2004;
+    localparam ADDR_RXDATA = 32'h4000_2008;
 
     reg clk   = 0;
     reg rst_n = 0;
@@ -62,7 +62,7 @@ module tb_uart_echo;
     // ============================================================
     // 两个被测模块
     // ============================================================
-    axi_to_apb #(.ADDR_W(32), .DATA_W(32), .TIMEOUT(0)) u_bridge (
+    axi_to_apb #(.ADDR_W(32), .DATA_W(32), .TIMEOUT(0), .BASE_ADDR(32'h4000_2000)) u_bridge (
         .clk(clk), .rst_n(rst_n),
         .awvalid(m_awvalid), .awready(awready), .awaddr(m_awaddr),
         .awlen(m_awlen), .awsize(m_awsize), .awburst(m_awburst),

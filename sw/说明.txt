@@ -10,6 +10,16 @@ sw/ —— Cortex-M0 固件（阶段4 分工 C）
   python sw/build.py            编译
   python sw/build.py --check    只探测工具链
 
+也可使用支持 ARM 的 Clang + ELF ld.lld + llvm-objcopy：
+  python sw/build.py --clang "路径/clang.exe" --lld "路径/ld.lld.exe"
+  llvm-objcopy 必须与 clang 位于同一目录；两个工具可来自不同目录。
+  Vivado 自带的 clangd-21.1.8/bin/clang.exe 和 tps/llvm/7.0/win64/bin/ld.lld.exe 可用于本机仿真构建。
+
+内存布局：代码区 0x0000~0x0DFF，SRAM 冒烟区 0x0E00~0x0EFF，
+测试信箱 0x0F00~0x0FFF，变量从 0x1000 开始，栈预留 0xC000~0xFFFF。
+链接器会拒绝代码或数据越界，防止测试区覆盖固件。
+诊断探针 sim/tinyfw.py 单独生成 sw/probe.hex，不能代替这里的 C 固件。
+
 需要 ARM 裸机工具链 arm-none-eabi-gcc（不是 keil、不是 mingw）：
   https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads
   装的时候务必勾选 Add path to environment variable

@@ -120,7 +120,7 @@ module tb_axi_to_apb;
     reg [31:0] err_addr = 32'h0000_FF00;     // 访问这个地址返回 PSLVERR
     reg        dbg_on   = 1'b0;              // 逐拍时序打印开关
 
-    axi_to_apb #(.ADDR_W(ADDR_W), .DATA_W(DATA_W), .TIMEOUT(0)) dut (
+    axi_to_apb #(.ADDR_W(ADDR_W), .DATA_W(DATA_W), .TIMEOUT(8)) dut (
         .clk(clk), .rst_n(rst_n),
         .awvalid(m_awvalid), .awready(awready), .awaddr(m_awaddr),
         .awlen(m_awlen), .awsize(m_awsize), .awburst(m_awburst),
@@ -417,6 +417,31 @@ module tb_axi_to_apb;
         chk({30'd0, resp}, 32'h2, "WRAP 突发读应返回 SLVERR");
 
         // ----------------------------------------------------
+        // Simultaneous independent address channels must both complete.
+        fork
+            begin
+                reg [1:0] wr;
+                axi_write(32'h20,0,2,1,32'h12345678,0,0,0,wr);
+                chk(wr,0,"simultaneous write response");
+            end
+            begin
+                reg [31:0] a,b,c,d;
+                reg [1:0] rr;
+                axi_read(32'h10,0,2,1,a,b,c,d,rr);
+                chk(rr,0,"simultaneous read response");
+            end
+        join
+        // An early APB error must still drain every AXI W beat.
+        err_addr=32'h20;
+        axi_write(32'h20,3,2,1,1,2,3,4,resp);
+        chk(resp,2,"early burst error is sticky and drains W");
+        err_addr=32'hffff;
+        wait_sel=15;
+        axi_write(32'h30,3,2,1,1,2,3,4,resp);
+        chk(resp,2,"timeout drains write burst");
+        axi_read(32'h30,3,2,1,q0,q1,q2,q3,resp);
+        chk(resp,2,"timeout returns every read beat");
+        wait_sel=0;
         repeat (10) @(posedge clk);
 
         // ----------------------------------------------------

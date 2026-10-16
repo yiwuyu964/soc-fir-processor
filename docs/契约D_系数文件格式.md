@@ -38,7 +38,7 @@
 ```verilog
 // fir/coeffs.vh —— 81 阶 FIR 系数，Q1.15，抽头顺序 H0=h[0]（当前样本）
 localparam signed [15:0] H0  = 16'sd20;
-localparam signed [15:0] H1  = 16'sd-20;
+localparam signed [15:0] H1  = -16'sd20;
 // ... 中间省略 ...
 localparam signed [15:0] H80 = 16'sd20;
 ```

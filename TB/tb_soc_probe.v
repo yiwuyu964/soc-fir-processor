@@ -1,7 +1,7 @@
 // 诊断台：查 UART 写通路到底断在哪一环
 `timescale 1ns/1ps
 
-module tb_diag;
+module tb_soc_probe;
     localparam ADDR_W=32, DATA_W=32, ID_W=4, SRAM_BYTES=65536;
     localparam SW_DEPTH = SRAM_BYTES/4;
     localparam MB_WORD  = 32'h0000_0F00/4;
@@ -43,7 +43,7 @@ module tb_diag;
     initial begin
         rst_n = 0;
         for (i=0;i<SW_DEPTH;i=i+1) dut.u_sram.mem[i] = 32'h0;
-        $readmemh("sw/firmware.hex", dut.u_sram.mem);
+        $readmemh("sw/probe.hex", dut.u_sram.mem);
         repeat (20) @(posedge clk);
         @(negedge clk); rst_n = 1;
         repeat (20) @(posedge clk);
@@ -59,7 +59,12 @@ module tb_diag;
         $display("命中 UART 地址(0x4000_2000)的 AXI 写次数 = %0d", hit_uart_aw);
         $display("uart_txd 跳变次数 = %0d", tx_edges);
         $display("uart_txd 当前电平 = %b", uart_txd);
-        $display("u_uart 内部：", );
+        if (dut.u_sram.mem[MB_WORD] !== 32'h534F4321 ||
+            dut.u_sram.mem[MB_WORD+6] !== 32'h1000 ||
+            dut.u_sram.mem[MB_WORD+3] !== 32'd1 ||
+            hit_uart_aw != 1 || tx_edges != 10 || uart_txd !== 1'b1)
+            $fatal(1, "FAIL: CPU-to-UART probe");
+        $display("===== PASS: CPU-to-UART probe, 10 TX edges =====");
         $finish;
     end
 endmodule

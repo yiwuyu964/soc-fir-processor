@@ -646,6 +646,23 @@ module tb_fir;
         chk(rmem[0], 32'h0000_0001, "复位后 STATUS=1（FIFO 空）");
 
         // ----------------------------------------------------
+        wmem[0]=1;
+        // STATUS must remain frozen while FIFO results arrive under R backpressure.
+        axi_write(32'h40000000,0,0,2,1,0,resp); // CTRL flush (wmem[0] set below)
+        @(negedge clk);
+        m_araddr=32'h4000000c; m_arlen=0; m_arid=0; m_arsize=2;
+        m_arburst=1; m_arvalid=1; m_rready=0;
+        @(posedge clk); while(!s_arready) @(posedge clk);
+        @(negedge clk); m_arvalid=0;
+        wait(s_rvalid); @(negedge clk);
+        begin
+            reg [31:0] held;
+            held=s_rdata;
+            force dut.dout_v=1'b1;
+            repeat(4) begin @(negedge clk); chk(s_rdata,held,"stalled STATUS stability"); end
+            release dut.dout_v;
+        end
+        m_rready=1; @(negedge clk); m_rready=0;
         repeat (10) @(posedge clk);
         $display("");
         $display("============================================");

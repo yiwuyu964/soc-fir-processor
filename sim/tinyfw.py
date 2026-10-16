@@ -37,7 +37,8 @@ W[0x98] = 0x00000F0C   # 信箱+3（回显计数）
 W[0x9C] = 0x00000001
 
 import sys
-dst = sys.argv[1] if len(sys.argv) > 1 else "firmware.hex"
+from pathlib import Path
+dst = sys.argv[1] if len(sys.argv) > 1 else str(Path(__file__).resolve().parents[1] / "sw" / "probe.hex")
 n = max(W.keys()) // 4 + 1
 with open(dst, "w", encoding="ascii", newline="\n") as f:
     f.write("\n".join("%08X" % W.get(i * 4, 0) for i in range(n)) + "\n")

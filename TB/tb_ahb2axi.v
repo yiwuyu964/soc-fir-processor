@@ -139,6 +139,7 @@ module tb_ahb2axi;
     reg [DATA_W-1:0] wmem [0:511];
     reg [DATA_W-1:0] rmem [0:511];
     reg              rresp_mem [0:511];
+    reg              last_wresp;
 
     task ahb_write;
         input [31:0] addr;
@@ -161,6 +162,7 @@ module tb_ahb2axi;
             for (i = 0; i <= nbeats; i = i + 1) begin
                 @(posedge clk);
                 while (!HREADY) @(posedge clk);   // 本步被接受
+                if (i > 0) last_wresp = HRESP;
                 @(negedge clk);
                 if (i < nbeats) HWDATA = wmem[base + i];         // 第 i 拍的写数据
                 if (i + 1 < nbeats) begin
@@ -335,9 +337,9 @@ module tb_ahb2axi;
         err_addr = 32'h0000_0050;
         wmem[0] = 32'h1234_5678;
         ahb_write(32'h0000_0050, 3'd2, 3'b000, 8'd1, 9'd0);
-        chk({31'd0, HRESP}, 32'h1, "写 SLVERR → HRESP=ERROR");
+        chk({31'd0, last_wresp}, 32'h1, "写 SLVERR → HRESP=ERROR");
         ahb_read(32'h0000_0050, 3'd2, 3'b000, 8'd1, 9'd0);
-        chk({31'd0, HRESP}, 32'h1, "读 SLVERR → HRESP=ERROR");
+        chk({31'd0, rresp_mem[0]}, 32'h1, "读 SLVERR → HRESP=ERROR");
         err_addr = 32'hFFFF_FFFF;   // 恢复
 
         // [7] 非对齐字节地址
@@ -346,6 +348,12 @@ module tb_ahb2axi;
         ahb_write(32'h0000_0063, 3'd0, 3'b000, 8'd1, 9'd0);   // lane 3
         ahb_read(32'h0000_0063, 3'd0, 3'b000, 8'd1, 9'd0);
         chk(rmem[0][31:24], 8'h5A, "字节读 0x63 → lane3=5A");
+
+        // Undefined INCR may end after any number of SEQ transfers.
+        for (i=0;i<3;i=i+1) wmem[i]=32'h81230000+i;
+        ahb_write(32'h100,2,3'b001,3,0);
+        ahb_read(32'h100,2,3'b001,3,0);
+        for (i=0;i<3;i=i+1) chk(rmem[i],32'h81230000+i,"short undefined INCR");
 
         // [8] 长时间随机读写
         $display("[8] 随机读写 200 笔");

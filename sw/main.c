@@ -103,7 +103,8 @@ static int uart_getc_nonblock(u8 *out)
 /* ---------------- 冒烟测试 ---------------- */
 static void smoke_sram(void)
 {
-    volatile u32 *p = (volatile u32 *)0x00000200u;   /* SRAM 里挑块地方 */
+    extern u32 _test_sram_start;
+    volatile u32 *p = &_test_sram_start;  /* Linker-reserved scratch memory. */
     u32 i;
     for (i = 0; i < 8; i++) p[i] = 0xA5A50000u + i;
     for (i = 0; i < 8; i++) check("sram", p[i], 0xA5A50000u + i);

@@ -132,7 +132,6 @@ module tb_soc;
                 $display("      ⚠️ 等不到起始位（%0t）—— 对端没发数据", $time);
                 disable uart_recv_byte;
             end
-            #(BAUD_NS/2);                   // 半位对齐到第一个数据位中点
             #(BAUD_NS + BAUD_NS/2);         // 跳到第一个数据位的中点
             for (i = 0; i < 8; i = i + 1) begin
                 b[i] = uart_txd;
@@ -167,7 +166,7 @@ module tb_soc;
         input [255:0] name;
         begin
             checks = checks + 1;
-            if (!cond) begin
+            if (cond !== 1'b1) begin
                 errors = errors + 1;
                 $display("  [FAIL] %0s", name);
             end
@@ -191,6 +190,7 @@ module tb_soc;
     reg [31:0] mb;
     integer echo_exp;
     integer guard;
+    integer fw_fd;
 
     initial begin
         // ⚠️ 波形默认【不录】。
@@ -211,13 +211,17 @@ module tb_soc;
             // 先填 0 再装固件：SRAM 没有复位，不填的话未初始化区是 X，
             // CPU 一读到 X 就可能跑飞
             $display("  装载固件: %0s", FW_HEX);
+            fw_fd = $fopen(FW_HEX, "r");
+            if (!fw_fd) $fatal(1, "FAIL: missing firmware; run python sw/build.py");
+            $fclose(fw_fd);
             $readmemh(FW_HEX, dut.u_sram.mem);
             // 说明：固件通常只有几百个字，而 SRAM 有 16384 个字，
             // iverilog 会报 "Not enough words in the file for the requested
             // range" —— 这是【正常】的，它只填固件那部分，其余保持预填的 0。
             // 不显示"已装入"，免得文件不存在时也报成功。
-            if (sram_word(0) === 32'hxxxxxxxx || sram_word(1) === 32'hxxxxxxxx)
-                $display("  ❌ 固件没装进去（文件不存在或格式不对）—— 先跑 python sw/build.py");
+            if ((^sram_word(0) === 1'bx) || (sram_word(0) == 0) ||
+                (^sram_word(1) === 1'bx) || ((sram_word(1) & 1) == 0))
+                $fatal(1, "FAIL: invalid firmware vectors");
         end else begin
             $display("  ⚠️ 跳过固件装载（+nofw），只做结构性检查");
         end
