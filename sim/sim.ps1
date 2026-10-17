@@ -115,6 +115,13 @@ Write-Host ""
 # ============================================================
 # 4. 逐个测试台：编译 + 运行
 # ============================================================
+# Rebuild the main firmware first: sw/firmware.hex is a gitignored build
+# artifact. A stale image makes tb_soc silently test old code -- a stale
+# literal pool once looked exactly like an RTL bug.
+if ((!$Only -or "tb_soc" -match $Only)) {
+    & python (Join-Path $RepoRoot "sw/build.py") | Out-Null
+    if ($LASTEXITCODE -ne 0) { exit 1 }
+}
 # Build only the diagnostic image; never overwrite sw/firmware.hex.
 if ((!$Only -or "tb_soc_probe" -match $Only)) {
     & python (Join-Path $RepoRoot "sim/tinyfw.py")
