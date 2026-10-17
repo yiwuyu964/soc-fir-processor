@@ -34,6 +34,7 @@ module axi_arbiter #(
     reg           locked;
     reg           found;
     integer       i;
+    integer       k;
 
     // ---- 组合轮转优先级：从 ptr 开始找第一个 req 为 1 的请求者 ----
     always @* begin
@@ -57,7 +58,7 @@ module axi_arbiter #(
             locked <= 1'b0;
         end else if (advance) begin
             locked <= 1'b0;
-            for (integer k = 0; k < N; k = k + 1)
+            for (k = 0; k < N; k = k + 1)
                 if (grant[k]) ptr <= (k == N-1) ? 0 : k + 1;
         end else if (!locked && |g) begin
             held <= g;

@@ -119,16 +119,46 @@ Write-Host ""
 # Rebuild the main firmware first: sw/firmware.hex is a gitignored build
 # artifact. A stale image makes tb_soc silently test old code -- a stale
 # literal pool once looked exactly like an RTL bug.
-if ((!$Only -or "tb_soc" -match $Only)) {
-    & python (Join-Path $RepoRoot "sw/build.py") | Out-Null
+#
+# 【固件内嵌的期望值必须先和本次向量对齐】
+# sw/fir_testvec.h 是由 fir/*.hex 生成的，而 fir/*.hex 是 gitignore 的重新生成产物。
+# 两者一旦不同步，固件拿旧激励比对、TB 又拿新 exp.hex 交叉核对，就会出现自相矛盾的
+# 假失败（阶段6 报"results[336] 与黄金模型不一致"，根因是向量不同步，RTL 没错）。
+# 所以编固件之前，先用当前生成器把向量和头文件刷新一遍，保证同源。
+$FwVecDir = Join-Path $OutDir "fir"
+if ((!$Only -or "tb_soc" -match $Only -or "tb_phase6_fir_dma" -match $Only)) {
+    if (-not (Test-Path $FwVecDir)) {
+        & python (Join-Path $RepoRoot "fir/fir_coeff.py") --outdir $FwVecDir | Out-Null
+        if ($LASTEXITCODE -ne 0) { exit 1 }
+    }
+    & python (Join-Path $RepoRoot "sw/gen_testvec.py") --indir $FwVecDir | Out-Null
     if ($LASTEXITCODE -ne 0) { exit 1 }
+}
+if ((!$Only -or "tb_soc" -match $Only)) {
+    # 【别在这里 exit】没有 ARM 工具链的机器（评委、CI、队友）上 build.py 会返回
+    # 非 0，以前这里直接 exit 1，导致整个回归在第 0 步之后立刻退出、一个测试台都不跑。
+    # 现在：编不出来就【明确告警】并沿用已有 firmware.hex；只有连旧固件也没有时才停。
+    $FwHex = Join-Path $RepoRoot "sw\firmware.hex"
+    $fwLog = & python (Join-Path $RepoRoot "sw/build.py") 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        if (Test-Path $FwHex) {
+            $ageH = ((Get-Date) - (Get-Item $FwHex).LastWriteTime).TotalHours
+            Write-Host ("      ⚠️  固件没能重新编译（多半是没装 ARM 工具链），沿用现有 firmware.hex") -ForegroundColor Yellow
+            Write-Host ("         它生成于 {0:N1} 小时前。若 sw/ 源码改过，tb_soc 测的是旧固件！" -f $ageH) -ForegroundColor Yellow
+            $fwLog | Select-Object -Last 8 | ForEach-Object { Write-Host ("         " + $_) -ForegroundColor DarkYellow }
+        } else {
+            Write-Host "      固件编译失败，且没有现成的 sw/firmware.hex —— tb_soc 无法运行" -ForegroundColor Red
+            $fwLog | Select-Object -Last 8 | ForEach-Object { Write-Host ("         " + $_) -ForegroundColor Red }
+            exit 1
+        }
+    }
 }
 # Build only the diagnostic image; never overwrite sw/firmware.hex.
 if ((!$Only -or "tb_soc_probe" -match $Only)) {
     & python (Join-Path $RepoRoot "sim/tinyfw.py")
     if ($LASTEXITCODE -ne 0) { exit 1 }
 }
-if ((!$Only -or "tb_fir_core" -match $Only -or "tb_fir" -match $Only -or "tb_phase5_integration" -match $Only)) {
+if ((!$Only -or "tb_fir_core" -match $Only -or "tb_fir" -match $Only -or "tb_phase5_integration" -match $Only -or "tb_phase6_fir_dma" -match $Only)) {
     $VectorDir = Join-Path $OutDir "fir"
     & python (Join-Path $RepoRoot "fir/fir_coeff.py") --outdir $VectorDir | Out-Null
     if ($LASTEXITCODE -ne 0) { exit 1 }

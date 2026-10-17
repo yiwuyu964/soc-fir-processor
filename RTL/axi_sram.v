@@ -283,7 +283,6 @@ module axi_sram #(
             r_size   <= 3'd2;
             r_burst  <= BURST_INCR;
             r_resp_r <= RESP_OKAY;
-            rdata_r  <= {DATA_W{1'b0}};
         end
         else begin
             ws_cur <= ws_next;
@@ -304,16 +303,9 @@ module axi_sram #(
                 end
                 WS_W: begin
                     if (w_hs) begin
-                        // 只有合法事务才真正落盘（越界/非法类型不写坏存储）
-                        if (w_resp_r == RESP_OKAY) begin
-                            // 按 WSTRB 逐字节写使能。本 SoC 的 AXI 数据宽度固定
-                            // 32bit（任务四 0.3），故直接展开 4 个字节通道：都用
-                            // **常量位选**，综合工具据此推断带字节使能的 BRAM。
-                            if (s_axi_wstrb[0]) mem[w_word_idx][7:0]   <= s_axi_wdata[7:0];
-                            if (s_axi_wstrb[1]) mem[w_word_idx][15:8]  <= s_axi_wdata[15:8];
-                            if (s_axi_wstrb[2]) mem[w_word_idx][23:16] <= s_axi_wdata[23:16];
-                            if (s_axi_wstrb[3]) mem[w_word_idx][31:24] <= s_axi_wdata[31:24];
-                        end
+                        // 存储写入不在这里：见文件末尾『存储体（可推断 BRAM）』那块。
+                        // 本 always 带异步复位，Vivado 会认定 RAM 也受异步复位影响，
+                        // 直接报 Synth 8-3391 拒绝推断 BRAM（524288 bit 拆不成触发器）。
                         w_beat <= w_beat + 8'd1;
                     end
                 end
@@ -321,8 +313,7 @@ module axi_sram #(
             endcase
 
             // ---------- 读通路 ----------
-            // 同步读端口：RS_REQ 拍发地址，下一拍数据可用
-            if (rd_en) rdata_r <= mem[r_word_idx];
+            // 同步读端口：RS_REQ 拍发地址，下一拍数据可用（读数在文件末尾那块做）
 
             case (rs_cur)
                 RS_IDLE: begin
@@ -342,6 +333,28 @@ module axi_sram #(
                 default: ;
             endcase
         end
+    end
+
+    // ============================================================
+    // 5. 存储体（可推断 BRAM）
+    //
+    // 【为什么单独开一个 always】
+    //   上面状态机块是 always @(posedge clk or negedge rst_n)。Vivado 看到同一块里
+    //   既有异步复位又有存储器写入，会认定『这块 RAM 对异步复位敏感』，直接报
+    //   Synth 8-3391 拒绝推断 BRAM（本设计 524288 bit，也拆不成触发器）。
+    //   把存储的读/写放进【纯同步、无异步复位】的时钟块，才是 BRAM 的标准写法。
+    //   『复位期间不落盘』的原语义用 rst_n 做同步使能来保持，功能不变。
+    //   - 写：按 WSTRB 逐字节写使能（常量位选，对应 BRAM 的 4 个 byte-enable）
+    //   - 读：同步读，地址拍后一拍出数
+    // ============================================================
+    always @(posedge clk) begin
+        if (rst_n && w_hs && (w_resp_r == RESP_OKAY)) begin
+            if (s_axi_wstrb[0]) mem[w_word_idx][7:0]   <= s_axi_wdata[7:0];
+            if (s_axi_wstrb[1]) mem[w_word_idx][15:8]  <= s_axi_wdata[15:8];
+            if (s_axi_wstrb[2]) mem[w_word_idx][23:16] <= s_axi_wdata[23:16];
+            if (s_axi_wstrb[3]) mem[w_word_idx][31:24] <= s_axi_wdata[31:24];
+        end
+        if (rst_n && rd_en) rdata_r <= mem[r_word_idx];
     end
 
 endmodule

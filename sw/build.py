@@ -27,6 +27,15 @@ import shutil
 import subprocess
 import sys
 
+# 输出兜底：Windows 控制台/管道默认是 GBK（cp936），本脚本里的 ✅ ❌ ⚠️ 在 GBK 下
+# 无法编码，重定向或 sim.ps1 管道捕获时会抛 UnicodeEncodeError 直接崩掉。
+# 改成遇到不可编码字符就替换，永远不因为一句提示文案而中断编译。
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(errors="replace")
+    except (AttributeError, ValueError):
+        pass
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
 
@@ -70,6 +79,15 @@ def find_toolchain():
         r"C:\gcc-arm-none-eabi\bin\arm-none-eabi-gcc.exe",
         r"D:\gcc-arm-none-eabi\bin\arm-none-eabi-gcc.exe",
         r"E:\gcc-arm-none-eabi\bin\arm-none-eabi-gcc.exe",
+        # 手动解压的绿色版：常见于桌面/下载目录，目录名带版本号（如 gcc-arm-none-eabi-10.3-2021.10）。
+        # 本机就是解压在桌面的，之前只认固定目录，导致"明明装了却报找不到"。
+        os.path.expanduser(r"~\Desktop\gcc-arm-none-eabi*\bin\arm-none-eabi-gcc.exe"),
+        os.path.expanduser(r"~\Downloads\gcc-arm-none-eabi*\bin\arm-none-eabi-gcc.exe"),
+        os.path.expanduser(r"~\Documents\gcc-arm-none-eabi*\bin\arm-none-eabi-gcc.exe"),
+        os.path.expanduser(r"~\gcc-arm-none-eabi*\bin\arm-none-eabi-gcc.exe"),
+        r"C:\gcc-arm-none-eabi*\bin\arm-none-eabi-gcc.exe",
+        r"D:\gcc-arm-none-eabi*\bin\arm-none-eabi-gcc.exe",
+        r"E:\gcc-arm-none-eabi*\bin\arm-none-eabi-gcc.exe",
         "/usr/bin/arm-none-eabi-gcc",
         "/opt/gcc-arm-none-eabi/bin/arm-none-eabi-gcc",
     ]

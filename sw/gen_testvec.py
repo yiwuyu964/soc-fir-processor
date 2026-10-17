@@ -18,8 +18,8 @@ HERE = Path(__file__).resolve().parent
 FIR = HERE.parent / "fir"
 
 
-def load(name):
-    rows = [r.strip() for r in (FIR / name).read_text(encoding="utf-8").splitlines()]
+def load(name, root=FIR):
+    rows = [r.strip() for r in (root / name).read_text(encoding="utf-8").splitlines()]
     return [int(r, 16) & 0xFFFF for r in rows if r]
 
 
@@ -32,9 +32,17 @@ def emit_array(f, ctype, name, vals, per_line=8):
 
 
 def main():
-    coef = load("coeffs.hex")
-    stim = load("stim.hex")
-    exp = load("exp.hex")
+    # --indir：向量目录。sim.ps1 把向量生成到临时目录（fir/*.hex 是 gitignore 的
+    # 产物），必须用同一个目录来生成头文件，否则固件内嵌的期望值和 TB 交叉核对用的
+    # exp.hex 会来自两批不同的向量 —— 阶段6 就因此报过"末项不一致"的假失败。
+    import argparse
+    ap = argparse.ArgumentParser(description="从黄金模型向量生成 sw/fir_testvec.h")
+    ap.add_argument("--indir", default=str(FIR), help="向量目录（含 coeffs.hex/stim.hex/exp.hex）")
+    args = ap.parse_args()
+    root = Path(args.indir)
+    coef = load("coeffs.hex", root)
+    stim = load("stim.hex", root)
+    exp = load("exp.hex", root)
     assert len(coef) == 81, len(coef)
     assert len(stim) == 256, len(stim)
     assert len(exp) == 336, len(exp)
