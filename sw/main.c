@@ -19,6 +19,9 @@ typedef unsigned int   u32;
 typedef unsigned short u16;
 typedef unsigned char  u8;
 
+/* 阶段6：软硬件协同用的测试向量（由 sw/gen_testvec.py 从黄金模型生成） */
+#include "fir_testvec.h"
+
 /* ---------------- 地址映射（契约S §S.4）---------------- */
 #define SRAM_BASE   0x00000000u
 #define FIR_BASE    0x40000000u
@@ -156,6 +159,72 @@ static void smoke_dma(void)
     MB[MB_DMA_IDX] = c;
 }
 
+/* ============================================================
+ * 阶段6：FIR × DMA 软硬件协同（CPU 配置 + DMA 搬运 + 黄金模型比对）
+ * ============================================================ */
+
+/* DMA 通道 CTRL 读语义（任务三 4.2 / 契约AB §1.4）：[31]=DONE [30]=BUSY [29]=ERR */
+#define DMA_DONE_BIT  0x80000000u
+#define DMA_BUSY_BIT  0x40000000u
+#define DMA_ERR_BIT   0x20000000u
+
+/* 缓冲区必须在 SRAM 里，DMA 通过 AXI 访问它们 */
+static u32 g_samples[TV_NSAMPLE];
+static u32 g_results[TV_NRESULT];
+
+/* 把 81 个系数写进 FIR（COEF[k] @ 0x100 + 4k） */
+static void fir_load_coef(void)
+{
+    u32 k;
+    for (k = 0; k < TV_NCOEF; k++)
+        REG32(FIR_BASE + 0x100u + 4u * k) = tv_coef[k];
+}
+
+/* 启动一次 DMA 搬运并等它结束。返回 1=完成，0=出错/超时 */
+static int dma_run(int ch, u32 src, u32 dst, u32 len, u32 src_inc, u32 dst_inc)
+{
+    u32 c, guard = 0;
+    DMA_SRC(ch) = src;
+    DMA_DST(ch) = dst;
+    DMA_LEN(ch) = len;
+    /* CTRL 写：bit0=START(自清) bit1=SRC_INC bit2=DST_INC */
+    DMA_CTRL(ch) = 0x1u | (src_inc ? 0x2u : 0u) | (dst_inc ? 0x4u : 0u);
+    do {
+        c = DMA_CTRL(ch);
+        if (c & DMA_DONE_BIT) return 1;
+        if (c & DMA_ERR_BIT)  return 0;
+        guard++;
+    } while (guard < 4000000u);
+    return 0;
+}
+
+/* 阶段6 主流程：系数 → flush → DMA 送样本 → DMA 取结果 → 与黄金模型逐位比对 */
+static void phase6_fir_dma(void)
+{
+    u32 i, bad = 0, d0, d1;
+
+    fir_load_coef();               /* 1. 下发系数 */
+    FIR_CTRL = 1u;                 /* 2. flush：清延迟线 + 清输出 FIFO */
+    delay(300);
+
+    for (i = 0; i < TV_NSAMPLE; i++) g_samples[i] = tv_sample[i];
+
+    /* 3. DMA0：内存样本 → FIR_DIN（目的地址固定，每次写推进一个样本） */
+    d0 = dma_run(0, (u32)g_samples, FIR_BASE + 0x004u, TV_NSAMPLE, 1u, 0u);
+    delay(300);
+    /* 4. DMA1：FIR_DOUT → 结果区（源地址固定，每读一次弹出一个结果） */
+    d1 = dma_run(1, FIR_BASE + 0x008u, (u32)g_results, TV_NRESULT, 0u, 1u);
+
+    /* 5. 与黄金模型逐位比对：results[1..336] <-> exp[0..335]（results[0] 是前导 0） */
+    for (i = 0; i < TV_NEXP; i++)
+        if ((u16)g_results[i + 1u] != (u16)tv_exp[i]) bad++;
+
+    /* MB[7]：bit0=DMA0完成 bit1=DMA1完成 bit2=比对全对；[31:16]=错拍数 */
+    MB[7] = (d0 ? 1u : 0u) | (d1 ? 2u : 0u) | (bad ? 0u : 4u) | (bad << 16);
+    MB[8] = g_results[1];          /* 第一个有效结果，供 TB 交叉核对 */
+    MB[9] = g_results[TV_NEXP];    /* 最后一个结果 */
+}
+
 /* ---------------- 主程序 ---------------- */
 int main(void)
 {
@@ -173,6 +242,11 @@ int main(void)
     smoke_sram();
     smoke_fir();
     smoke_dma();
+
+    /* ---- 阶段6：FIR x DMA 端到端（系数 -> DMA 送样本 -> DMA 取结果 -> 比对）----
+     * 必须放在"冒烟完成"标志之前：TB 看到 MB[6] 时阶段6 已经跑完，
+     * 后面的 UART 回显才不会被阶段6 的耗时挤掉。 */
+    phase6_fir_dma();
 
     MB[MB_PASS_IDX] = g_pass;
     MB[MB_FAIL_IDX] = g_fail;
