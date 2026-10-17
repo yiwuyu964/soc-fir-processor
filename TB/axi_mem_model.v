@@ -46,7 +46,8 @@ module axi_mem_model #(
     parameter DATA_W = 32,
     parameter ID_W   = 4,
     parameter BASE      = 32'h0,      // 本从设备基址：索引前先减掉（默认 0，即从 0 编址）
-    parameter MEM_BYTES = 16384
+    parameter MEM_BYTES = 16384,
+    parameter STALL_CYCLES = 0
 )(
     input  wire                 clk,
     input  wire                 rst_n,
@@ -105,8 +106,14 @@ module axi_mem_model #(
     wire w_hs  = wvalid  && wready;
     wire b_hs  = bvalid  && bready;
 
-    assign awready = (ws_cur == WS_IDLE);
-    assign wready  = (ws_cur == WS_W);
+    integer stall_phase=0;
+    always @(posedge clk or negedge rst_n)
+        if(!rst_n) stall_phase<=0;
+        else if(stall_phase==STALL_CYCLES) stall_phase<=0;
+        else stall_phase<=stall_phase+1;
+    wire ready_slot = (stall_phase==0);
+    assign awready = (ws_cur == WS_IDLE) && ready_slot;
+    assign wready  = (ws_cur == WS_W) && ready_slot;
     assign bvalid  = (ws_cur == WS_B);
     assign bid     = w_id;
     assign bresp   = w_err ? 2'b10 : 2'b00;
@@ -171,7 +178,7 @@ module axi_mem_model #(
     wire ar_hs = arvalid && arready;
     wire r_hs  = rvalid  && rready;
 
-    assign arready = (rs_cur == RS_IDLE);
+    assign arready = (rs_cur == RS_IDLE) && ready_slot;
     assign rvalid  = (rs_cur == RS_R);
     assign rid     = r_id;
     assign rresp   = r_err ? 2'b10 : 2'b00;

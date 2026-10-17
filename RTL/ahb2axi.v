@@ -84,6 +84,12 @@ module ahb2axi #(
             size <= HSIZE;
             aw_done <= 0; w_done <= 0; resp_err <= 0;
             state <= HWRITE ? W_CAPTURE : R_ADDR;
+            // AHB requires natural alignment (AXI's unaligned allowance does not apply).
+            if(HSIZE > 2 || (HADDR & ((32'd1 << HSIZE)-1)) != 0) begin
+                resp_err <= 1;
+                rdata <= 0;
+                state <= ERROR_FIRST;
+            end
         end else case (state)
             IDLE: resp_err <= 0;
             W_CAPTURE: begin wdata <= HWDATA; state <= W_SEND; end

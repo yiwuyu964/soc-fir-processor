@@ -43,6 +43,16 @@ module tb_fifo_arbiter;
             ren=0;
             if(!empty || count!=0) $fatal(1,"FAIL: FIFO empty/count");
         end
+        wen=1;data=8'h41;@(negedge clk);wen=0;
+        if(q!==8'h41)$fatal(1,"FAIL: FIFO simultaneous setup");
+        wen=1;ren=1;data=8'h42;@(negedge clk);wen=0;ren=0;
+        if(count!==1 || q!==8'h42)$fatal(1,"FAIL: FIFO simultaneous read/write");
+        ren=1;@(negedge clk);ren=0;
+        if(!empty)$fatal(1,"FAIL: FIFO simultaneous final count");
+        $display("COV|arbiter|stalled_winner");
+        $display("COV|arbiter|round_robin_all");
+        $display("COV|fifo|non_power_two_wrap");
+        $display("COV|fifo|simultaneous_read_write");
         $display("===== PASS: arbitration stability/fairness and depth-3 FIFO =====");
         $finish;
     end
