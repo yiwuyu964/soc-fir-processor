@@ -73,6 +73,7 @@ $Rtl     = @(Get-ChildItem (Join-Path $RepoRoot "RTL") -Recurse -Filter *.v | Fo
 # 验证公共件：所有测试台都可能用到
 $Helpers = @("axi_protocol_checker.v", "axi_id_contract_check.v", "axi_mem_model.v") |
            ForEach-Object { Join-Path $RepoRoot ("TB\" + $_) } | Where-Object { Test-Path $_ }
+$Helpers += @(Get-ChildItem (Join-Path $RepoRoot "TB") -Filter "phase5_*" -File | ForEach-Object FullName)
 $AllTb   = @(Get-ChildItem (Join-Path $RepoRoot "TB") -Filter "tb_*.v" | Sort-Object Name)
 
 if ($AllTb.Count -eq 0) { Write-Host "TB/ 下没有找到 tb_*.v" -ForegroundColor Red; exit 1 }
@@ -127,7 +128,7 @@ if ((!$Only -or "tb_soc_probe" -match $Only)) {
     & python (Join-Path $RepoRoot "sim/tinyfw.py")
     if ($LASTEXITCODE -ne 0) { exit 1 }
 }
-if ((!$Only -or "tb_fir_core" -match $Only -or "tb_fir" -match $Only)) {
+if ((!$Only -or "tb_fir_core" -match $Only -or "tb_fir" -match $Only -or "tb_phase5_integration" -match $Only)) {
     $VectorDir = Join-Path $OutDir "fir"
     & python (Join-Path $RepoRoot "fir/fir_coeff.py") --outdir $VectorDir | Out-Null
     if ($LASTEXITCODE -ne 0) { exit 1 }
@@ -161,7 +162,7 @@ foreach ($tb in $AllTb) {
     $verdict = ($rLog -split $NL | Select-String -Pattern "PASS|FAIL|TIMEOUT" | Select-Object -Last 1)
     $txt = if ($verdict) { $verdict.Line.Trim() } else { "(无结论输出)" }
 
-    if ($runExit -ne 0 -or $rLog -match "(?im)^.*(FAIL|TIMEOUT|FATAL|ERROR:).*$") { $txt = ($rLog -split $NL | Select-String -Pattern "FAIL|TIMEOUT|FATAL|ERROR:" | Select-Object -Last 1).Line; $mark = "失败"; $color = "Red" }
+    if ($runExit -ne 0 -or $rLog -match "(?im)\b(FAIL|TIMEOUT|FATAL)\b|(^|\s)ERROR:") { $txt = ($rLog -split $NL | Select-String -Pattern "\b(FAIL|TIMEOUT|FATAL)\b|(^|\s)ERROR:" | Select-Object -Last 1).Line; $mark = "失败"; $color = "Red" }
     elseif ($verdict -and $txt -match "PASS")    { $mark = "通过"; $color = "Green" }
     elseif ($txt -match "TIMEOUT") { $mark = "超时"; $color = "Yellow" }
     elseif ($txt -match "FAIL")    { $mark = "失败"; $color = "Red" }

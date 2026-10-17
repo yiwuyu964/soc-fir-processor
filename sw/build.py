@@ -132,8 +132,8 @@ def run(cmd):
 def main():
     ap = argparse.ArgumentParser(description="编译 Cortex-M0 固件")
     ap.add_argument("--check", action="store_true", help="只探测工具链，不编译")
-    ap.add_argument("--clang", help="Optional ARM-capable clang executable")
-    ap.add_argument("--lld", help="ELF ld.lld executable (with --clang)")
+    ap.add_argument("--clang", default=os.environ.get("SOC_CLANG"), help="Optional ARM-capable clang executable; or SOC_CLANG")
+    ap.add_argument("--lld", default=os.environ.get("SOC_LLD"), help="ELF ld.lld executable (with --clang); or SOC_LLD")
     args = ap.parse_args()
 
     if args.clang:

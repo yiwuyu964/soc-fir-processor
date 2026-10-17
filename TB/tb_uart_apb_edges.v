@@ -40,6 +40,8 @@ module tb_uart_apb_edges;
         if(prdata[0]!==1) $fatal(1,"FAIL: consecutive APB setup not recognized");
         access(0,8,0,15,0);
         if(prdata!==0) $fatal(1,"FAIL: empty RXDATA must read zero");
+        access(0,0,0,15,0);
+        if(prdata!==0) $fatal(1,"FAIL: DATA read must return zero");
         @(negedge clk);psel=0;
         repeat(220) @(negedge clk);
         if(starts!=1 || !txd) $fatal(1,"FAIL: unexpected transmission");

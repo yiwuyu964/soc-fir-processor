@@ -12,3 +12,9 @@ FIR 向量会自动生成到独立临时目录，诊断探针单独生成 sw/pro
 FATAL、ERROR 或没有 PASS 结论均判失败；无匹配测试也返回失败。
 波形在临时目录生成，不覆盖仓库中的既有波形。
 设置 IVERILOG 为 iverilog 可执行文件路径，可启用 test_tools.py 的头文件编译检查。
+
+阶段5（不含 CPU 的模块/集成验证）：
+  python sim/phase5.py --line-coverage --report docs/阶段5-覆盖率报告.md
+  python sim/test_phase5.py        覆盖统计器正/负向检查
+  验证范围、XSim 原生覆盖选项和许可限制见 docs/阶段5-验证计划.md。
+  详细日志和 JSON 位于 build/phase5/，不需要提交这些构建产物。
