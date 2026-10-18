@@ -36,10 +36,11 @@ def title_of(path):
 
 def main():
     rows = []
-    for p in sorted(DOCS.glob("*.md")):
+    for p in sorted(DOCS.rglob("*.md")):
         if p.name == "README.md":
             continue
-        rows.append((classify(p.name), p.name, title_of(p),
+        rel = p.relative_to(DOCS).as_posix()
+        rows.append((classify(p.name), rel, title_of(p),
                      len(p.read_text(encoding="utf-8-sig").splitlines())))
 
     out = ["# docs 文档总索引", "",
@@ -111,3 +112,4 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
