@@ -1,0 +1,6 @@
+Part=xc7z020clg400-1
+Period_ns=20
+Mode=route
+SourceRef=
+Stage=C:\Windows\Temp\soc_check_932b2fbda2f94556a8b14a3376d91298
+ExitCode=0

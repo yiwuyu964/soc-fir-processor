@@ -4,7 +4,8 @@ module tb_phase5_integration;
     always #5 clk=~clk;
     phase5_fabric dut(.clk(clk),.rst_n(rst_n));
     wire [191:0] dma_status_flat=dut.u_dma.eng_status;
-    reg [15:0] coeff[0:80], stim[0:255], golden[0:335];
+    localparam NTAP=82, NSAMP=256, NEXP=NSAMP+NTAP-1, NRESULT=NEXP+1;
+    reg [15:0] coeff[0:NTAP-1], stim[0:NSAMP-1], golden[0:NEXP-1];
     reg [31:0] q;
     integer i,ch,seed=1;
     // Check continuously so reset cannot erase earlier protocol violations.
@@ -43,13 +44,13 @@ module tb_phase5_integration;
         repeat(5) @(negedge clk);rst_n=1;
         repeat(3) @(negedge clk);
         // Program coefficients through the interconnect, never by backdoor.
-        for(i=0;i<81;i=i+1) begin dut.cpu.tx[i]=coeff[i];dut.cpu.strobes[i]=15;end
-        dut.cpu.write(32'h40000100,80,2,1,0);
+        for(i=0;i<NTAP;i=i+1) begin dut.cpu.tx[i]=coeff[i];dut.cpu.strobes[i]=15;end
+        dut.cpu.write(32'h40000100,NTAP-1,2,1,0);
         dut.cpu.write32(32'h40000000,1);
-        // 256 samples + 81 zeros = leading zero + 336 full-convolution results.
-        for(i=0;i<337;i=i+1) dut.cpu.write32(32'hf00+4*i,i<256 ? {16'b0,stim[i]} : 0);
+        // 256 samples + 82 zeros = leading zero + 337 full-convolution results.
+        for(i=0;i<NRESULT;i=i+1) dut.cpu.write32(32'hf00+4*i,i<NSAMP ? {16'b0,stim[i]} : 0);
         for(i=0;i<32;i=i+1) dut.cpu.write32(32'h5000+4*i,32'ha55a0000+i);
-        configure(0,32'hf00,32'h40000004,337,3);
+        configure(0,32'hf00,32'h40000004,NRESULT,3);
         configure(2,32'h5000,32'h6000,32,7);
         fork
             begin
@@ -63,16 +64,16 @@ module tb_phase5_integration;
         wait_channel(0,0);wait_channel(2,0);
         repeat(10) @(negedge clk);
         dut.cpu.read32(32'h4000000c,q);
-        if(q[31:16]!==337 || q[3]) $fatal(1,"FAIL: FIR result count/overflow %h",q);
-        configure(1,32'h40000008,32'h2ff0,337,5);
+        if(q[31:16]!==NRESULT || q[3]) $fatal(1,"FAIL: FIR result count/overflow %h",q);
+        configure(1,32'h40000008,32'h2ff0,NRESULT,5);
         wait_channel(1,0);
-        for(i=0;i<337;i=i+1) begin
+        for(i=0;i<NRESULT;i=i+1) begin
             dut.cpu.read32(32'h2ff0+4*i,q);
             if(q[15:0] !== (i==0 ? 16'd0 : golden[i-1]))
                 $fatal(1,"FAIL: FIR/DMA end-to-end sample=%d got=%h",i,q);
         end
         for(i=0;i<32;i=i+1) begin dut.cpu.read32(32'h6000+4*i,q);if(q!==32'ha55a0000+i)$fatal(1,"FAIL: parallel copy");end
-        hit("fir_dma_golden_337");hit("parallel_cpu_dma");hit("dma_4k_split");
+        hit("fir_dma_golden_338");hit("parallel_cpu_dma");hit("dma_4k_split");
         // All six engines contend for the real SRAM port.
         for(ch=0;ch<6;ch=ch+1) begin
             for(i=0;i<32;i=i+1) dut.cpu.write32(32'h8000+ch*256+i*4,32'hf0000000+ch*256+i);

@@ -125,7 +125,7 @@ static void smoke_fir(void)
     check("fir_empty", st & 0x1u, 0x1u);
     check("fir_done0", st & 0x4u, 0x0u);
 
-    /* 灌一个冲击（x[0]=0x7FFF，其余 0），推 81 拍应该能出一个非零结果 */
+    /* 灌一个冲击（x[0]=0x7FFF，其余 0），推 82 拍应该能出一个非零结果 */
     FIR_DIN = 0x7FFFu;
     {
         int i;
@@ -172,7 +172,7 @@ static void smoke_dma(void)
 static u32 g_samples[TV_NSAMPLE];
 static u32 g_results[TV_NRESULT];
 
-/* 把 81 个系数写进 FIR（COEF[k] @ 0x100 + 4k） */
+/* 把 82 个系数写进 FIR（COEF[k] @ 0x100 + 4k） */
 static void fir_load_coef(void)
 {
     u32 k;
@@ -215,7 +215,7 @@ static void phase6_fir_dma(void)
     /* 4. DMA1：FIR_DOUT → 结果区（源地址固定，每读一次弹出一个结果） */
     d1 = dma_run(1, FIR_BASE + 0x008u, (u32)g_results, TV_NRESULT, 0u, 1u);
 
-    /* 5. 与黄金模型逐位比对：results[1..336] <-> exp[0..335]（results[0] 是前导 0） */
+    /* 5. 与黄金模型逐位比对：results[1..337] <-> exp[0..336]（results[0] 是前导 0） */
     for (i = 0; i < TV_NEXP; i++)
         if ((u16)g_results[i + 1u] != (u16)tv_exp[i]) bad++;
 

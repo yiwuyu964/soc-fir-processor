@@ -1,0 +1,66 @@
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2026 Advanced Micro Devices, Inc. All Rights Reserved.
+---------------------------------------------------------------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2026.1 (win64) Build 6511674 Tue Jun 16 11:02:23 MDT 2026
+| Date         : Sun Oct 18 10:11:58 2026
+| Host         : LAPTOP-RI0QADEP running 64-bit major release  (build 9200)
+| Command      : report_utilization -hierarchical -file route_util.rpt
+| Design       : soc_top
+| Device       : xc7z020clg400-1
+| Speed File   : -1
+| Design State : Routed
+---------------------------------------------------------------------------------------------------------------------------------------------
+
+Utilization Design Information
+
+Table of Contents
+-----------------
+1. Utilization by Hierarchy
+
+1. Utilization by Hierarchy
+---------------------------
+
++-------------------------+--------------------------------+------------+------------+---------+------+------+--------+--------+------------+
+|         Instance        |             Module             | Total LUTs | Logic LUTs | LUTRAMs | SRLs |  FFs | RAMB36 | RAMB18 | DSP Blocks |
++-------------------------+--------------------------------+------------+------------+---------+------+------+--------+--------+------------+
+| soc_top                 |                          (top) |      12782 |      11544 |    1238 |    0 | 9108 |     16 |      0 |         85 |
+|   (soc_top)             |                          (top) |          1 |          1 |       0 |    0 |   10 |      0 |      0 |          0 |
+|   u_ahb2axi             |                        ahb2axi |        288 |        288 |       0 |    0 |  104 |      0 |      0 |          0 |
+|   u_axi2apb             |                     axi_to_apb |        124 |        124 |       0 |    0 |   93 |      0 |      0 |          0 |
+|   u_cpu                 |               cortexm0ds_logic |       2682 |       2682 |       0 |    0 |  897 |      0 |      0 |          3 |
+|   u_dma                 |                            dma |       4467 |       3411 |    1056 |    0 | 1619 |      0 |      0 |          0 |
+|     u_regs              |                       dma_regs |        458 |        458 |       0 |    0 |  679 |      0 |      0 |          0 |
+|     g_eng[0].u_eng      |                     dma_engine |        721 |        545 |     176 |    0 |  152 |      0 |      0 |          0 |
+|       (g_eng[0].u_eng)  |                     dma_engine |        388 |        388 |       0 |    0 |  127 |      0 |      0 |          0 |
+|       u_fifo            |   sync_fifo__parameterized0_18 |        333 |        157 |     176 |    0 |   25 |      0 |      0 |          0 |
+|     g_eng[1].u_eng      |     dma_engine__parameterized0 |        549 |        373 |     176 |    0 |  152 |      0 |      0 |          0 |
+|       (g_eng[1].u_eng)  |     dma_engine__parameterized0 |        289 |        289 |       0 |    0 |  127 |      0 |      0 |          0 |
+|       u_fifo            |   sync_fifo__parameterized0_17 |        260 |         84 |     176 |    0 |   25 |      0 |      0 |          0 |
+|     g_eng[2].u_eng      |     dma_engine__parameterized1 |        538 |        362 |     176 |    0 |  152 |      0 |      0 |          0 |
+|       (g_eng[2].u_eng)  |     dma_engine__parameterized1 |        280 |        280 |       0 |    0 |  127 |      0 |      0 |          0 |
+|       u_fifo            |   sync_fifo__parameterized0_16 |        258 |         82 |     176 |    0 |   25 |      0 |      0 |          0 |
+|     g_eng[3].u_eng      |     dma_engine__parameterized2 |        571 |        395 |     176 |    0 |  152 |      0 |      0 |          0 |
+|       (g_eng[3].u_eng)  |     dma_engine__parameterized2 |        296 |        296 |       0 |    0 |  127 |      0 |      0 |          0 |
+|       u_fifo            |   sync_fifo__parameterized0_15 |        275 |         99 |     176 |    0 |   25 |      0 |      0 |          0 |
+|     g_eng[4].u_eng      |     dma_engine__parameterized3 |        601 |        425 |     176 |    0 |  152 |      0 |      0 |          0 |
+|       (g_eng[4].u_eng)  |     dma_engine__parameterized3 |        281 |        281 |       0 |    0 |  127 |      0 |      0 |          0 |
+|       u_fifo            |   sync_fifo__parameterized0_14 |        320 |        144 |     176 |    0 |   25 |      0 |      0 |          0 |
+|     g_eng[5].u_eng      |     dma_engine__parameterized4 |        529 |        353 |     176 |    0 |  152 |      0 |      0 |          0 |
+|       (g_eng[5].u_eng)  |     dma_engine__parameterized4 |        286 |        286 |       0 |    0 |  127 |      0 |      0 |          0 |
+|       u_fifo            |      sync_fifo__parameterized0 |        243 |         67 |     176 |    0 |   25 |      0 |      0 |          0 |
+|     u_ar_arb            | axi_arbiter__parameterized0_12 |        223 |        223 |       0 |    0 |   10 |      0 |      0 |          0 |
+|     u_aw_arb            | axi_arbiter__parameterized0_13 |        290 |        290 |       0 |    0 |   10 |      0 |      0 |          0 |
+|   u_fir                 |                            fir |       4638 |       4462 |     176 |    0 | 6050 |      0 |      0 |         82 |
+|     (u_fir)             |                            fir |        103 |        103 |       0 |    0 |  168 |      0 |      0 |          0 |
+|     u_fir_core          |                       fir_core |       4239 |       4239 |       0 |    0 | 5854 |      0 |      0 |         82 |
+|     u_out_fifo          |                      sync_fifo |        298 |        122 |     176 |    0 |   28 |      0 |      0 |          0 |
+|   u_ic                  |                         axi_ic |        405 |        405 |       0 |    0 |  141 |      0 |      0 |          0 |
+|     (u_ic)              |                         axi_ic |         37 |         37 |       0 |    0 |   65 |      0 |      0 |          0 |
+|     g_bpath[1].u_b_arb  |  axi_arbiter__parameterized0_0 |         54 |         54 |       0 |    0 |    9 |      0 |      0 |          0 |
+|     g_rrpath[0].u_r_arb |  axi_arbiter__parameterized0_5 |         66 |         66 |       0 |    0 |    9 |      0 |      0 |          0 |
+|     g_rrpath[1].u_r_arb |  axi_arbiter__parameterized0_6 |        102 |        102 |       0 |    0 |    9 |      0 |      0 |          0 |
+|   u_sram                |                       axi_sram |         92 |         92 |       0 |    0 |   87 |     16 |      0 |          0 |
+|   u_uart                |                       uart_apb |        110 |        104 |       6 |    0 |  107 |      0 |      0 |          0 |
++-------------------------+--------------------------------+------------+------------+---------+------+------+--------+--------+------------+
+* Note: The sum of lower-level cells may be larger than their parent cells total, due to cross-hierarchy LUT combining
+
+

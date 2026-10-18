@@ -36,13 +36,21 @@ module axi_arbiter #(
     integer       i;
     integer       k;
 
-    // ---- 组合轮转优先级：从 ptr 开始找第一个 req 为 1 的请求者 ----
+    // Scan constant request indices in two ranges. A runtime % N on a
+    // 32-bit loop expression infers a large divider for N=6; fixed bit
+    // selects plus a pointer mask preserve round-robin without division.
     always @* begin
         g     = {N{1'b0}};
         found = 1'b0;
         for (i = 0; i < N; i = i + 1) begin
-            if (!found && req[(ptr + i) % N]) begin
-                g[(ptr + i) % N] = 1'b1;
+            if (!found && (i >= ptr) && req[i]) begin
+                g[i] = 1'b1;
+                found = 1'b1;
+            end
+        end
+        for (i = 0; i < N; i = i + 1) begin
+            if (!found && req[i]) begin
+                g[i] = 1'b1;
                 found = 1'b1;
             end
         end

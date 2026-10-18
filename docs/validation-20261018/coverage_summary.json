@@ -1,0 +1,328 @@
+{
+  "source_sha256": "0488d6ef27f3b492d8945da48f2355df54ff6aa5b32540db42071fcddd22d70c",
+  "tests": [
+    {
+      "top": "tb_phase5_ahb",
+      "seed": 1,
+      "status": "PASS"
+    },
+    {
+      "top": "tb_phase5_sram",
+      "seed": 1,
+      "status": "PASS"
+    },
+    {
+      "top": "tb_phase5_integration",
+      "seed": 1,
+      "status": "PASS"
+    },
+    {
+      "top": "tb_phase5_integration",
+      "seed": 7,
+      "status": "PASS"
+    },
+    {
+      "top": "tb_phase5_integration",
+      "seed": 23,
+      "status": "PASS"
+    },
+    {
+      "top": "tb_axi_to_apb",
+      "seed": 1,
+      "status": "PASS"
+    },
+    {
+      "top": "tb_axi_sram",
+      "seed": 1,
+      "status": "PASS"
+    },
+    {
+      "top": "tb_axi_ic",
+      "seed": 1,
+      "status": "PASS"
+    },
+    {
+      "top": "tb_fifo_arbiter",
+      "seed": 1,
+      "status": "PASS"
+    },
+    {
+      "top": "tb_dma_engine",
+      "seed": 1,
+      "status": "PASS"
+    },
+    {
+      "top": "tb_dma_self",
+      "seed": 1,
+      "status": "PASS"
+    },
+    {
+      "top": "tb_dma",
+      "seed": 1,
+      "status": "PASS"
+    },
+    {
+      "top": "tb_dma_ic",
+      "seed": 1,
+      "status": "PASS"
+    },
+    {
+      "top": "tb_fir_core_contract",
+      "seed": 1,
+      "status": "PASS"
+    },
+    {
+      "top": "tb_fir_core",
+      "seed": 1,
+      "status": "PASS"
+    },
+    {
+      "top": "tb_fir",
+      "seed": 1,
+      "status": "PASS"
+    },
+    {
+      "top": "tb_uart_echo",
+      "seed": 1,
+      "status": "PASS"
+    },
+    {
+      "top": "tb_uart_apb_edges",
+      "seed": 1,
+      "status": "PASS"
+    }
+  ],
+  "native_coverage": "not_run",
+  "required_bins": 86,
+  "hit_bins": 86,
+  "missing_bins": [],
+  "native_covergroups": [],
+  "events": {
+    "ahb|burst.0": 13,
+    "ahb|burst.1": 18,
+    "ahb|burst.2": 24,
+    "ahb|burst.3": 24,
+    "ahb|burst.4": 48,
+    "ahb|burst.5": 48,
+    "ahb|burst.6": 96,
+    "ahb|burst.7": 96,
+    "ahb|busy": 1467,
+    "ahb|error_complete": 5,
+    "ahb|error_first": 5,
+    "ahb|invalid_alignment_size": 1,
+    "ahb|size.0": 120,
+    "ahb|size.1": 121,
+    "ahb|size.2": 125,
+    "ahb|size.3": 1,
+    "ahb|size_burst_matrix": 1,
+    "ahb|wait": 3642,
+    "apb|early_error_drain": 1,
+    "apb|halfword_strobe": 1,
+    "apb|simultaneous_addresses": 1,
+    "apb|timeout_all_beats": 1,
+    "arbiter|round_robin_all": 1,
+    "arbiter|stalled_winner": 1,
+    "cpu|ar.aligned.1": 2603,
+    "cpu|ar.burst.0": 3,
+    "cpu|ar.burst.1": 2600,
+    "cpu|ar.len.0": 2597,
+    "cpu|ar.len.3": 6,
+    "cpu|ar.size.2": 2603,
+    "cpu|aw.aligned.1": 1944,
+    "cpu|aw.burst.1": 1944,
+    "cpu|aw.len.0": 1938,
+    "cpu|aw.len.2": 3,
+    "cpu|aw.len.81": 3,
+    "cpu|aw.size.2": 1944,
+    "cpu|b.resp.0": 1944,
+    "cpu|r.resp.0": 2606,
+    "cpu|r.resp.3": 15,
+    "cpu|stall.ar": 1005,
+    "cpu|stall.aw": 84,
+    "cpu|stall.b": 5832,
+    "cpu|stall.r": 5999,
+    "dma|ar.aligned.1": 162,
+    "dma|ar.burst.0": 66,
+    "dma|ar.burst.1": 96,
+    "dma|ar.len.1": 9,
+    "dma|ar.len.13": 3,
+    "dma|ar.len.15": 123,
+    "dma|ar.len.255": 3,
+    "dma|ar.len.3": 3,
+    "dma|ar.len.31": 21,
+    "dma|ar.size.2": 162,
+    "dma|aw.aligned.1": 156,
+    "dma|aw.burst.0": 66,
+    "dma|aw.burst.1": 90,
+    "dma|aw.len.1": 6,
+    "dma|aw.len.13": 3,
+    "dma|aw.len.15": 123,
+    "dma|aw.len.3": 3,
+    "dma|aw.len.31": 21,
+    "dma|aw.size.2": 156,
+    "dma|b.resp.0": 153,
+    "dma|b.resp.3": 3,
+    "dma|r.resp.0": 2716,
+    "dma|r.resp.3": 6,
+    "dma|stall.ar": 55,
+    "fifo|non_power_two_wrap": 1,
+    "fifo|simultaneous_read_write": 1,
+    "fir|ar.aligned.1": 69,
+    "fir|ar.burst.0": 66,
+    "fir|ar.burst.1": 3,
+    "fir|ar.len.0": 3,
+    "fir|ar.len.13": 3,
+    "fir|ar.len.15": 60,
+    "fir|ar.len.3": 3,
+    "fir|ar.size.2": 69,
+    "fir|aw.aligned.1": 72,
+    "fir|aw.burst.0": 66,
+    "fir|aw.burst.1": 6,
+    "fir|aw.len.0": 3,
+    "fir|aw.len.1": 3,
+    "fir|aw.len.15": 63,
+    "fir|aw.len.81": 3,
+    "fir|aw.size.2": 72,
+    "fir|b.resp.0": 72,
+    "fir|r.resp.0": 1017,
+    "fir|stall.b": 18,
+    "fir|stall.r": 9,
+    "integration|decode_errors": 3,
+    "integration|dma_4k_split": 3,
+    "integration|dma_config_bursts": 3,
+    "integration|dma_read_decerr": 3,
+    "integration|dma_write_decerr": 3,
+    "integration|fir_dma_golden_338": 3,
+    "integration|parallel_cpu_dma": 3,
+    "integration|reset_active_recovery": 3,
+    "integration|six_channels": 3,
+    "integration|zero_length": 3,
+    "sram|ar.aligned.0": 2,
+    "sram|ar.aligned.1": 19,
+    "sram|ar.burst.0": 5,
+    "sram|ar.burst.1": 14,
+    "sram|ar.burst.2": 1,
+    "sram|ar.burst.3": 1,
+    "sram|ar.len.0": 8,
+    "sram|ar.len.1": 3,
+    "sram|ar.len.15": 1,
+    "sram|ar.len.16": 1,
+    "sram|ar.len.255": 1,
+    "sram|ar.len.3": 7,
+    "sram|ar.size.0": 2,
+    "sram|ar.size.1": 2,
+    "sram|ar.size.2": 16,
+    "sram|ar.size.3": 1,
+    "sram|aw.aligned.0": 2,
+    "sram|aw.aligned.1": 22,
+    "sram|aw.burst.0": 5,
+    "sram|aw.burst.1": 17,
+    "sram|aw.burst.2": 1,
+    "sram|aw.burst.3": 1,
+    "sram|aw.len.0": 12,
+    "sram|aw.len.1": 2,
+    "sram|aw.len.15": 1,
+    "sram|aw.len.16": 1,
+    "sram|aw.len.255": 1,
+    "sram|aw.len.3": 7,
+    "sram|aw.size.0": 6,
+    "sram|aw.size.1": 2,
+    "sram|aw.size.2": 15,
+    "sram|aw.size.3": 1,
+    "sram|b.resp.0": 18,
+    "sram|b.resp.2": 5,
+    "sram|b.resp.3": 1,
+    "sram|byte_lanes_zero_strobe": 1,
+    "sram|cross_4k_no_side_effect": 1,
+    "sram|last_word": 1,
+    "sram|max_lengths": 1,
+    "sram|r.resp.0": 305,
+    "sram|r.resp.2": 25,
+    "sram|r.resp.3": 1,
+    "sram|size_burst_matrix": 1,
+    "sram|stall.b": 72,
+    "sram|stall.r": 662,
+    "sram|unaligned_incr": 1,
+    "sram|unsupported_and_out_of_range": 1
+  },
+  "work_dir": "C:\\Users\\公子\\AppData\\Local\\Temp\\soc_phase5_0ip6y3l6",
+  "procedural_line_coverage": {
+    "ahb2axi.v": {
+      "hit": 30,
+      "total": 31,
+      "missing": [
+        113
+      ]
+    },
+    "axi_arbiter.v": {
+      "hit": 23,
+      "total": 23,
+      "missing": []
+    },
+    "axi_ic.v": {
+      "hit": 74,
+      "total": 74,
+      "missing": []
+    },
+    "axi_sram.v": {
+      "hit": 65,
+      "total": 65,
+      "missing": []
+    },
+    "axi_to_apb.v": {
+      "hit": 124,
+      "total": 124,
+      "missing": []
+    },
+    "dma.v": {
+      "hit": 18,
+      "total": 20,
+      "missing": [
+        349,
+        351
+      ]
+    },
+    "dma_engine.v": {
+      "hit": 78,
+      "total": 78,
+      "missing": []
+    },
+    "dma_regs.v": {
+      "hit": 84,
+      "total": 85,
+      "missing": [
+        359
+      ]
+    },
+    "fir.v": {
+      "hit": 101,
+      "total": 101,
+      "missing": []
+    },
+    "fir_core.v": {
+      "hit": 46,
+      "total": 46,
+      "missing": []
+    },
+    "sync_fifo.v": {
+      "hit": 18,
+      "total": 18,
+      "missing": []
+    },
+    "uart_apb.v": {
+      "hit": 36,
+      "total": 36,
+      "missing": []
+    },
+    "uart_rx.v": {
+      "hit": 46,
+      "total": 46,
+      "missing": []
+    },
+    "uart_tx.v": {
+      "hit": 36,
+      "total": 36,
+      "missing": []
+    }
+  }
+}

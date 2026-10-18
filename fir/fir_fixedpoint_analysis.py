@@ -97,11 +97,11 @@ def width_report(vals, cw, dw):
     sa = sum(abs(vals[k]) for k in range(half))
     out['sym_half'] = half
     out['sym_sum_abs'] = sa
-    out['sym_center'] = vals[mid]
+    out['sym_center'] = vals[mid] if n % 2 else 0
     out['sym_pre_w'] = dw + 1                                  # 17 bit 预加器
     out['sym_prod_w'] = dw + 1 + cw                            # 33 bit
-    out['sym_worst_any'] = (1 << dw) * (half * (1 << (cw - 1))) + (1 << (dw - 1)) * (1 << (cw - 1))
-    out['sym_worst_this'] = (1 << dw) * sa + (1 << (dw - 1)) * abs(vals[mid])
+    out['sym_worst_any'] = (1 << dw) * (half * (1 << (cw - 1))) + ((1 << (dw - 1)) * (1 << (cw - 1)) if n % 2 else 0)
+    out['sym_worst_this'] = (1 << dw) * sa + (1 << (dw - 1)) * abs(out['sym_center'])
     out['sym_w_any'] = bits_needed(out['sym_worst_any'])
     out['sym_w_this'] = bits_needed(out['sym_worst_this'])
     return out
@@ -132,7 +132,7 @@ def main():
     here = os.path.dirname(os.path.abspath(__file__))
     ap.add_argument('--coeffs', type=str, default=None,
                     help='coeffs.vh 路径，默认脚本旁的 coeffs.vh')
-    ap.add_argument('--taps', type=int, default=81)
+    ap.add_argument('--taps', type=int, default=82, help='Expected coefficient count (81st order = 82)')
     ap.add_argument('--cw', type=int, default=16, help='系数位宽，默认 16')
     ap.add_argument('--dw', type=int, default=16, help='数据位宽，默认 16')
     args = ap.parse_args()
@@ -152,6 +152,8 @@ def main():
     if not vals:
         print('[错误] %s 里没解析到系数' % path)
         return 1
+    if len(vals) != args.taps:
+        ap.error('coefficient count %d does not match --taps %d' % (len(vals), args.taps))
 
     r = width_report(vals, args.cw, args.dw)
     hdr = '=' * 66
@@ -195,10 +197,10 @@ def main():
     print('')
 
     print('--- 4. 对称折叠（决赛结构，41 乘法器）---')
-    print('  预加器 s = x[k] + x[80-k] : %d bit, |s| <= %d'
-          % (r['sym_pre_w'], 1 << (r['sym_pre_w'] - 1)))
+    print('  预加器 s = x[k] + x[%d-k] : %d bit, |s| <= %d'
+          % (r['ntap']-1, r['sym_pre_w'], 1 << (r['sym_pre_w'] - 1)))
     print('  乘积 17 x 16              : %d bit' % r['sym_prod_w'])
-    print('  Σ|h[0..%d]| = %d , h[%d] = %d' % (r['sym_half'] - 1, r['sym_sum_abs'], 40, r['sym_center']))
+    print('  Σ|h[0..%d]| = %d , unpaired center = %d' % (r['sym_half'] - 1, r['sym_sum_abs'], r['sym_center']))
     print('  [任意系数] 最坏累加 = %d = 2^%.3f -> %d bit'
           % (r['sym_worst_any'], math.log2(r['sym_worst_any']), r['sym_w_any']))
     print('  [本组系数] 最坏累加 = %d = 2^%.3f -> %d bit'
@@ -219,7 +221,7 @@ def main():
     print('  乘积      : 32 bit (Q2.30)，精确')
     print('  累加器    : 40 bit（硬下限 %d bit）' % r['acc_w_any'])
     print('  输出      : 算术右移 15 位 + 饱和到 16 bit')
-    print('  结构      : 初赛 直接型 81 乘法器 / 决赛 对称型 41 乘法器')
+    print('  结构      : 初赛直接型 %d 乘法器 / 对称折叠仅为可选优化' % r['ntap'])
     print('  流水线    : 初赛 5 级 / 决赛 6 级，吞吐 1 sample/cycle')
     print(hdr)
     return 0

@@ -1,0 +1,13 @@
+test_compiler_denominator_and_unexecuted_branch (test_phase5.CoverageTests.test_compiler_denominator_and_unexecuted_branch) ... ok
+test_trace_run_cannot_hide_failure_behind_pass (test_phase5.CoverageTests.test_trace_run_cannot_hide_failure_behind_pass) ... ok
+test_binary_converter_little_endian_and_padding (test_tools.ToolTests.test_binary_converter_little_endian_and_padding) ... ok
+test_even_and_odd_folding_bounds_match_direct_worst_case (test_tools.ToolTests.test_even_and_odd_folding_bounds_match_direct_worst_case) ... ok
+test_fallback_cutoff_is_relative_to_nyquist (test_tools.ToolTests.test_fallback_cutoff_is_relative_to_nyquist) ... ok
+test_generated_header_is_valid_verilog (test_tools.ToolTests.test_generated_header_is_valid_verilog) ... ok
+test_judge_rrmse_definition_and_zero_reference (test_tools.ToolTests.test_judge_rrmse_definition_and_zero_reference) ... ok
+test_reference_checker_rejects_truncation_and_wrong_values (test_tools.ToolTests.test_reference_checker_rejects_truncation_and_wrong_values) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.627s
+
+OK

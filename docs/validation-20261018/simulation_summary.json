@@ -1,0 +1,158 @@
+﻿[
+    {
+        "测试台":  "tb_ahb2axi",
+        "编译":  "OK",
+        "运行":  "通过",
+        "结论":  "===== PASS: 20 项检查全部通过，AXI 协议无违规 ====="
+    },
+    {
+        "测试台":  "tb_axi_checker",
+        "编译":  "OK",
+        "运行":  "通过",
+        "结论":  "===== PASS: 自测 16 项全部通过（不误报、不漏报）====="
+    },
+    {
+        "测试台":  "tb_axi_ic",
+        "编译":  "OK",
+        "运行":  "通过",
+        "结论":  "===== PASS：527 项检查全部通过，无死锁 ====="
+    },
+    {
+        "测试台":  "tb_axi_id_check",
+        "编译":  "OK",
+        "运行":  "通过",
+        "结论":  "===== PASS: 自测 5 项全部通过（不误报、不漏报）====="
+    },
+    {
+        "测试台":  "tb_axi_sram",
+        "编译":  "OK",
+        "运行":  "通过",
+        "结论":  "===== PASS: 47 项检查全部通过（正常用例 AXI 协议零违规）====="
+    },
+    {
+        "测试台":  "tb_axi_to_apb",
+        "编译":  "OK",
+        "运行":  "通过",
+        "结论":  "===== PASS: 27 项检查全部通过，AXI 与 APB 协议均无违规 ====="
+    },
+    {
+        "测试台":  "tb_dma",
+        "编译":  "OK",
+        "运行":  "通过",
+        "结论":  "===== PASS: 69 项检查全部通过，AXI 协议与契约C 零违规 ====="
+    },
+    {
+        "测试台":  "tb_dma_engine",
+        "编译":  "OK",
+        "运行":  "通过",
+        "结论":  "===== PASS: 21 项检查全部通过，AXI 协议零违规 ====="
+    },
+    {
+        "测试台":  "tb_dma_ic",
+        "编译":  "OK",
+        "运行":  "通过",
+        "结论":  "===== PASS: 14 项检查全部通过，DMA×互连 零违规 ====="
+    },
+    {
+        "测试台":  "tb_dma_precheck",
+        "编译":  "OK",
+        "运行":  "通过",
+        "结论":  "===== PASS: DMA constant-time burst precheck equals original per-beat algorithm: 165891 cases ====="
+    },
+    {
+        "测试台":  "tb_dma_self",
+        "编译":  "OK",
+        "运行":  "通过",
+        "结论":  "===== PASS: 70 项检查全部通过，AXI 协议零违规 ====="
+    },
+    {
+        "测试台":  "tb_fifo_arbiter",
+        "编译":  "OK",
+        "运行":  "通过",
+        "结论":  "===== PASS: arbitration stability/fairness and depth-3 FIFO ====="
+    },
+    {
+        "测试台":  "tb_fir",
+        "编译":  "OK",
+        "运行":  "通过",
+        "结论":  "===== PASS: bit-exact fixed-point and float RRMSE \u003c 0.1% ====="
+    },
+    {
+        "测试台":  "tb_fir_asymmetric",
+        "编译":  "OK",
+        "运行":  "通过",
+        "结论":  "===== PASS: default 82 taps, final-tap impulse, arbitrary asymmetric coefficients, latency, throughput, gaps, live update and flush: 976 results ====="
+    },
+    {
+        "测试台":  "tb_fir_core",
+        "编译":  "OK",
+        "运行":  "通过",
+        "结论":  "===== PASS: 337 个样本与黄金模型逐位一致 ====="
+    },
+    {
+        "测试台":  "tb_fir_core_contract",
+        "编译":  "OK",
+        "运行":  "通过",
+        "结论":  "===== PASS: 契约 A 全部 8 项自检通过 ====="
+    },
+    {
+        "测试台":  "tb_phase5_ahb",
+        "编译":  "OK",
+        "运行":  "通过",
+        "结论":  "===== PASS: AHB all HBURST x HSIZE, BUSY, stalls, errors ====="
+    },
+    {
+        "测试台":  "tb_phase5_integration",
+        "编译":  "OK",
+        "运行":  "通过",
+        "结论":  "===== PASS: CPU-free FIR+DMA+interconnect seed=1 ====="
+    },
+    {
+        "测试台":  "tb_phase5_sram",
+        "编译":  "OK",
+        "运行":  "通过",
+        "结论":  "===== PASS: phase5 SRAM directed boundaries and scoreboard ====="
+    },
+    {
+        "测试台":  "tb_phase6_fir_dma",
+        "编译":  "OK",
+        "运行":  "通过",
+        "结论":  "===== PASS: FIR x DMA bit-exact to fixed-point reference (float RRMSE checked separately) ====="
+    },
+    {
+        "测试台":  "tb_soc",
+        "编译":  "OK",
+        "运行":  "通过",
+        "结论":  "===== PASS: 13 项检查全部通过，UART 回显闭环正常 ====="
+    },
+    {
+        "测试台":  "tb_soc_bus",
+        "编译":  "OK",
+        "运行":  "通过",
+        "结论":  "===== PASS: reserved DECERR and DMA SRAM/UART both directions ====="
+    },
+    {
+        "测试台":  "tb_soc_probe",
+        "编译":  "OK",
+        "运行":  "通过",
+        "结论":  "===== PASS: CPU-to-UART probe, 10 TX edges ====="
+    },
+    {
+        "测试台":  "tb_sram_offset",
+        "编译":  "OK",
+        "运行":  "通过",
+        "结论":  "===== PASS: SRAM base-relative indexing and stalled reads ====="
+    },
+    {
+        "测试台":  "tb_uart_apb_edges",
+        "编译":  "OK",
+        "运行":  "通过",
+        "结论":  "===== PASS: APB consecutive setup, strobe, busy and empty RX ====="
+    },
+    {
+        "测试台":  "tb_uart_echo",
+        "编译":  "OK",
+        "运行":  "通过",
+        "结论":  "===== PASS: 23 项检查全部通过，UART 回显闭环正常 ====="
+    }
+]
