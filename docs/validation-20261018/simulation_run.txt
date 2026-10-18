@@ -1,11 +1,11 @@
 
-iverilog  : E:\apps\iverilog\iverilog\bin\iverilog.exe
-仓库根目录: C:\Users\公子\Desktop\project\soc-fir-processor
+iverilog  : iverilog 安装目录\bin\iverilog.exe
+仓库根目录: <仓库根目录>
 
 [0/26] 全量编译检查（RTL + 全部 TB 一起编译）...
       OK 全量编译通过，无重名模块
 
-wrote C:\Users\����\Desktop\project\soc-fir-processor\sw\probe.hex (40 words)
+wrote <仓库根目录>\sw\probe.hex (40 words)
 [1/26] tb_ahb2axi  通过
 [2/26] tb_axi_checker  通过
 [3/26] tb_axi_ic  通过
@@ -66,5 +66,5 @@ tb_uart_echo          OK 通过 ===== PASS: 23 项检查全部通过，UART 回�
 
 
 
-详细日志: C:\Users\公子\Desktop\project\soc-fir-processor\build\sim
+详细日志: <仓库根目录>\build\sim
 ===== 全部通过：26 个测试台 =====
