@@ -2,7 +2,7 @@
 // tb_soc.v —— SoC 顶层集成验证（阶段4 分工 C）
 //
 // 【验证对象】RTL/soc_top.v（A 的顶层集成）
-//   端口与地址映射严格按 docs/阶段4-契约S-soc顶层端口.md
+//   端口与地址映射严格按 docs/契约S-soc顶层端口.md
 //
 // 【这个测试台验证什么】（= 阶段4 交付要求「UART 回显仿真通过记录」）
 //   [1] 固件装进 SRAM 后 CPU 能启动（信箱出现魔数 'SOC!'）
@@ -15,7 +15,7 @@
 //     （其存储阵列沿用 axi_sram.v 的 mem，TB 用它装固件、读测试信箱）
 //   · soc_top 里 AHB→AXI 桥的实例名必须是  u_ahb2axi
 //     （TB 在它的 AXI 主口 m_axi_* 上挂 AXI 协议检查器）
-//   这两条已写进 docs/阶段4-契约S-soc顶层端口.md §S.12。
+//   这两条已写进 docs/契约S-soc顶层端口.md §S.12。
 //
 // 【运行】
 //   先编固件：  python sw/build.py

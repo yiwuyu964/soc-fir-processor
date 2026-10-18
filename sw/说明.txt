@@ -30,5 +30,5 @@ sw/ —— Cortex-M0 固件（阶段4 分工 C）
   firmware.bin   原始二进制
   firmware.hex   【给 TB/tb_soc.v 的 $readmemh 用】每行一个 32bit 小端字
 
-地址依据：docs/阶段4-契约S-soc顶层端口.md §S.4 / §S.6
-寄存器依据：docs/任务三_地址映射与中断分配.md §4.1 / §4.2 / §4.3
+地址依据：docs/契约S-soc顶层端口.md §S.4 / §S.6
+寄存器依据：docs/任务3-地址映射与中断分配.md §4.1 / §4.2 / §4.3
