@@ -12,11 +12,11 @@
 //   [7]  WSTRB：字节写 CTRL 也能 flush、半字写 DIN、WSTRB=0000 空写无副作用
 //   [8]  错误响应：未映射地址 / 访问类型不符 / WRAP / SIZE>2 / 跨 4KB /
 //        跨区域 INCR —— 全部 SLVERR 且被拒写事务无副作用
-//   [9]  INCR 写突发：81 拍下发全部系数（契约 D.6 的 B 消费方式）
-//   [10] FIXED 写突发：256 拍样本 + 81 拍 0 流式写 DIN（337 拍 → 337 个结果）
-//   [11] 结果就绪 + irq_done + STATUS 计数（count=337）
+//   [9]  INCR 写突发：82 拍下发全部系数（契约 D.6 的 B 消费方式）
+//   [10] FIXED 写突发：256 拍样本 + 82 拍 0 流式写 DIN（338 拍 → 338 个结果）
+//   [11] 结果就绪 + irq_done + STATUS 计数（count=338）
 //   [12] INCR 读突发：DOUT+STATUS 两拍，RLAST 落在第 2 拍
-//   [13] FIXED 读突发：回读 336 个结果，与 fir/exp.hex 逐位一致（got[i+1]==exp[i]）
+//   [13] FIXED 读突发：回读 337 个结果，与 fir/exp.hex 逐位一致（got[i+1]==exp[i]）
 //   [14] 回读完毕后 STATUS 复核
 //   [15] FIFO 溢出：写 603 个样本 → count=512 + irq_err；读 STATUS 清，排空 512 拍
 //   [16] 复位健壮性
@@ -39,9 +39,9 @@ module tb_fir;
     localparam DATA_W = 32;
     localparam ID_W   = 4;
     localparam DW     = 16;
-    localparam NTAP   = 81;
+    localparam NTAP   = 82;
     localparam NSAMP  = 256;
-    localparam NEXP   = NSAMP + NTAP - 1;        // 全卷积长度 = 336
+    localparam NEXP   = NSAMP + NTAP - 1;        // 全卷积长度 = 337
     localparam BASE   = 32'h4000_0000;           // 契约 C：FIR 基址
 
     reg clk   = 0;
@@ -112,7 +112,7 @@ module tb_fir;
 
     reg [15:0] coeffs [0:NTAP-1];               // fir/coeffs.hex（契约 D.4）
     reg [15:0] stim   [0:NSAMP-1];              // fir/stim.hex（契约 E.2）
-    reg [15:0] exp    [0:NEXP-1];               // fir/exp.hex（全卷积 336 个）
+    reg [15:0] exp    [0:NEXP-1];               // fir/exp.hex（全卷积 337 个）
 
     integer errors = 0;
     integer checks = 0;
@@ -514,26 +514,26 @@ module tb_fir;
         chk(rmem[0], 32'h0000_0001, "被拒写事务无副作用（FIFO 仍空）");
 
         // ----------------------------------------------------
-        // [9] INCR 写突发：81 拍下发全部系数（契约 D.6 的 B 消费方式）
+        // [9] INCR 写突发：82 拍下发全部系数（契约 D.6 的 B 消费方式）
         // ----------------------------------------------------
-        $display("[9] INCR 写突发下发 81 个系数");
+        $display("[9] INCR 写突发下发 82 个系数");
         for (i = 0; i < NTAP; i = i + 1) wmem[i] = {16'h0000, coeffs[i]};
-        axi_write(BASE + 32'h100, 4'h2, 8'd80, 3'd2, 2'b01, 9'd0, resp);
-        chk({30'd0, resp}, 32'h0, "INCR 系数突发（81 拍）响应 OKAY");
+        axi_write(BASE + 32'h100, 4'h2, NTAP-1, 3'd2, 2'b01, 9'd0, resp);
+        chk({30'd0, resp}, 32'h0, "INCR 系数突发（82 拍）响应 OKAY");
 
         // ----------------------------------------------------
-        // [10] FIXED 写突发：256 拍样本 + 81 拍 0（排空）流式写 DIN
-        //      337 个 en 脉冲 → 337 个结果 = 前导 0 + 336 个全卷积输出
+        // [10] FIXED 写突发：256 拍样本 + 82 拍 0（排空）流式写 DIN
+        //      338 个 en 脉冲 → 338 个结果 = 前导 0 + 337 个全卷积输出
         // ----------------------------------------------------
-        $display("[10] FIXED 写突发下发 256 个样本 + 81 个排空 0");
+        $display("[10] FIXED 写突发下发 256 个样本 + 82 个排空 0");
         wmem[0] = 32'h0000_0001;
         axi_write(BASE + 32'h000, 4'h1, 8'd0, 3'd2, 2'b01, 9'd0, resp);    // flush
         for (i = 0; i < NSAMP; i = i + 1) wmem[i] = {16'h0000, stim[i]};
         axi_write(BASE + 32'h004, 4'h3, 8'd255, 3'd2, 2'b00, 9'd0, resp);
         chk({30'd0, resp}, 32'h0, "FIXED 突发写 DIN（256 拍样本）响应 OKAY");
-        for (i = 0; i <= 80; i = i + 1) wmem[i] = 32'h0000_0000;
-        axi_write(BASE + 32'h004, 4'h3, 8'd80, 3'd2, 2'b00, 9'd0, resp);
-        chk({30'd0, resp}, 32'h0, "FIXED 突发写 DIN（81 拍 0，排空）响应 OKAY");
+        for (i = 0; i < NTAP; i = i + 1) wmem[i] = 32'h0000_0000;
+        axi_write(BASE + 32'h004, 4'h3, NTAP-1, 3'd2, 2'b00, 9'd0, resp);
+        chk({30'd0, resp}, 32'h0, "FIXED 突发写 DIN（82 拍 0，排空）响应 OKAY");
 
         // ----------------------------------------------------
         // [11] 结果就绪 + irq_done + STATUS 计数
@@ -542,7 +542,7 @@ module tb_fir;
         wait_cycles(16'd700);
         chk({31'd0, irq_done}, 32'h1, "结果就绪后 irq_done=1");
         axi_read(BASE + 32'h00C, 4'h1, 8'd0, 3'd2, 2'b01, 9'd0, resp);
-        chk(rmem[0], 32'h0151_0004, "STATUS：count=337, done=1");
+        chk(rmem[0], ((NEXP+1) << 16) | 4, "STATUS: full result count, done=1");
         chk({31'd0, irq_done}, 32'h0, "读 STATUS 后 irq_done 清除");
 
         // ----------------------------------------------------
@@ -552,19 +552,19 @@ module tb_fir;
         axi_read(BASE + 32'h008, 4'h5, 8'd1, 3'd2, 2'b01, 9'd0, resp);
         chk({30'd0, resp}, 32'h0, "INCR 读第 0 拍（DOUT）响应 OKAY");
         chk(rmem[0], 32'h0000_0000, "第 0 拍 DOUT = 前导 0");
-        chk(rmem[1], 32'h0150_0004, "第 1 拍 STATUS：count=336, done=1");
+        chk(rmem[1], (NEXP << 16) | 4, "STATUS: leading result consumed, done=1");
         chk_rd_burst(8'd1, 9'd0, 2'b00, "INCR 读突发");
 
         // ----------------------------------------------------
-        // [13] FIXED 读突发回读 336 个结果，与黄金模型逐位比对
+        // [13] FIXED 读突发回读 337 个结果，与黄金模型逐位比对
         // ----------------------------------------------------
-        $display("[13] 全量回读 336 个结果，与黄金模型逐位比对");
+        $display("[13] 全量回读 337 个结果，与黄金模型逐位比对");
         axi_read(BASE + 32'h008, 4'h6, 8'd255, 3'd2, 2'b00, 9'd0, resp);
         chk({30'd0, resp}, 32'h0, "FIXED 读突发 0（256 拍）OKAY");
         chk_rd_burst(8'd255, 9'd0, 2'b00, "FIXED 读突发 0");
-        axi_read(BASE + 32'h008, 4'h6, 8'd79, 3'd2, 2'b00, 9'd256, resp);
+        axi_read(BASE + 32'h008, 4'h6, NTAP-2, 3'd2, 2'b00, 9'd256, resp);
         chk({30'd0, resp}, 32'h0, "FIXED 读突发 1（80 拍）OKAY");
-        chk_rd_burst(8'd79, 9'd256, 2'b00, "FIXED 读突发 1");
+        chk_rd_burst(NTAP-2, 9'd256, 2'b00, "FIXED 读突发 1");
 
         // 比对约定（契约 E.6）：got[0]=前导 0（[12] 已查），got[i+1]==exp[i]
         begin
@@ -581,7 +581,7 @@ module tb_fir;
             checks = checks + 1;
             if (bad != 0) begin
                 errors = errors + 1;
-                $display("  [FAIL] 336 个样本逐位比对：%0d 处不一致", bad);
+                $display("  [FAIL] 337 个样本逐位比对：%0d 处不一致", bad);
             end
         end
 

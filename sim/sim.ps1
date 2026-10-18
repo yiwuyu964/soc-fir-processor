@@ -25,10 +25,18 @@ param(
     [string] $Only  = "",
     [switch] $List,
     [switch] $NoLint,
-    [switch] $KeepVcd          # 保留波形文件（默认跑完删掉，免得仓库变脏）
+    [switch] $KeepVcd,         # 保留波形文件（默认跑完删掉，免得仓库变脏）
+    [switch] $AllowStaleFirmware, # Explicit diagnostic fallback, never the default
+    [string] $ResultDir = "build\sim"
 )
 
 $ErrorActionPreference = "Continue"
+function Get-Sha256([string] $Path) {
+    $Hash = [Security.Cryptography.SHA256]::Create()
+    $Stream = [IO.File]::OpenRead($Path)
+    try { return ([BitConverter]::ToString($Hash.ComputeHash($Stream))).Replace("-", "") }
+    finally { $Stream.Dispose(); $Hash.Dispose() }
+}
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $RepoRoot
 
@@ -86,6 +94,9 @@ if ($List) {
 
 $OutDir = Join-Path $env:TEMP ("socsim_" + [guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
+$ReportDir = [IO.Path]::GetFullPath((Join-Path $RepoRoot $ResultDir))
+New-Item -ItemType Directory -Force -Path $ReportDir | Out-Null
+& $IV -V 2>&1 | Out-File (Join-Path $ReportDir "iverilog-version.log") -Encoding utf8
 
 # ============================================================
 # 3. 第一步：全量编译检查（专门堵"重名模块"这类坑）
@@ -94,8 +105,10 @@ if (-not $NoLint) {
     Write-Host "[0/$($AllTb.Count)] 全量编译检查（RTL + 全部 TB 一起编译）..." -ForegroundColor Yellow
     $lintOut = Join-Path $OutDir "lintall.out"
     $lintLog = & $IV -g2012 -Wall -I $IncDir -o $lintOut ($Rtl + $Helpers + ($AllTb | ForEach-Object { $_.FullName })) 2>&1
+    $lintCode = $LASTEXITCODE
+    $lintLog | Out-File (Join-Path $ReportDir "lint.log") -Encoding utf8
     $lintErr = @($lintLog | Select-String -Pattern "error:")
-    if ($LASTEXITCODE -ne 0) {
+    if ($lintCode -ne 0) {
         Write-Host ""
         Write-Host "全量编译失败 —— 这类问题单跑各自的 TB 是发现不了的：" -ForegroundColor Red
         $lintLog | ForEach-Object { Write-Host ("   " + $_.ToString().Trim()) -ForegroundColor Red }
@@ -134,20 +147,21 @@ if ((!$Only -or "tb_soc" -match $Only -or "tb_phase6_fir_dma" -match $Only)) {
     & python (Join-Path $RepoRoot "sw/gen_testvec.py") --indir $FwVecDir | Out-Null
     if ($LASTEXITCODE -ne 0) { exit 1 }
 }
-if ((!$Only -or "tb_soc" -match $Only)) {
-    # 【别在这里 exit】没有 ARM 工具链的机器（评委、CI、队友）上 build.py 会返回
-    # 非 0，以前这里直接 exit 1，导致整个回归在第 0 步之后立刻退出、一个测试台都不跑。
-    # 现在：编不出来就【明确告警】并沿用已有 firmware.hex；只有连旧固件也没有时才停。
+if ((!$Only -or "tb_soc" -match $Only -or "tb_phase6_fir_dma" -match $Only)) {
+    # Always rebuild the C firmware for CPU/phase6 tests. Stale firmware
+    # is permitted only as an explicit diagnostic override.
     $FwHex = Join-Path $RepoRoot "sw\firmware.hex"
     $fwLog = & python (Join-Path $RepoRoot "sw/build.py") 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        if (Test-Path $FwHex) {
+    $fwCode = $LASTEXITCODE
+    $fwLog | Out-File (Join-Path $ReportDir "firmware-build.log") -Encoding utf8
+    if ($fwCode -ne 0) {
+        if ($AllowStaleFirmware -and (Test-Path $FwHex)) {
             $ageH = ((Get-Date) - (Get-Item $FwHex).LastWriteTime).TotalHours
             Write-Host ("      ⚠️  固件没能重新编译（多半是没装 ARM 工具链），沿用现有 firmware.hex") -ForegroundColor Yellow
             Write-Host ("         它生成于 {0:N1} 小时前。若 sw/ 源码改过，tb_soc 测的是旧固件！" -f $ageH) -ForegroundColor Yellow
             $fwLog | Select-Object -Last 8 | ForEach-Object { Write-Host ("         " + $_) -ForegroundColor DarkYellow }
         } else {
-            Write-Host "      固件编译失败，且没有现成的 sw/firmware.hex —— tb_soc 无法运行" -ForegroundColor Red
+            Write-Host "      固件编译失败。回归默认禁止沿用旧固件；诊断时可显式传 -AllowStaleFirmware。" -ForegroundColor Red
             $fwLog | Select-Object -Last 8 | ForEach-Object { Write-Host ("         " + $_) -ForegroundColor Red }
             exit 1
         }
@@ -174,7 +188,9 @@ foreach ($tb in $AllTb) {
 
     $out = Join-Path $OutDir ($name + ".out")
     $cLog = & $IV -g2012 -Wall -s $name -I $IncDir -o $out ($Rtl + $Helpers + $tb.FullName) 2>&1
-    if ($LASTEXITCODE -ne 0) {
+    $compileCode = $LASTEXITCODE
+    $cLog | Out-File (Join-Path $ReportDir ($name + ".compile.log")) -Encoding utf8
+    if ($compileCode -ne 0) {
         $firstErr = ($cLog | Select-String -Pattern "error:" | Select-Object -First 1)
         Write-Host "  编译失败" -ForegroundColor Red
         if ($firstErr) { Write-Host ("       " + $firstErr.Line.Trim()) -ForegroundColor Red }
@@ -189,6 +205,14 @@ foreach ($tb in $AllTb) {
     Push-Location $OutDir
     try { $rLog = (& $VV $out 2>&1) -join $NL } finally { Pop-Location }
     $runExit = $LASTEXITCODE
+    if ($name -eq "tb_fir" -and (Test-Path (Join-Path $OutDir "got.hex"))) {
+        Copy-Item -LiteralPath (Join-Path $OutDir "got.hex") -Destination (Join-Path $ReportDir "fir-got.hex")
+        $numericLog = & python (Join-Path $RepoRoot "fir/fir_coeff.py") --outdir $VectorDir --check (Join-Path $OutDir "got.hex") 2>&1
+        $numericCode = $LASTEXITCODE
+        $rLog += $NL + ($numericLog -join $NL)
+        if ($numericCode -ne 0) { $runExit = $numericCode }
+    }
+    $rLog | Out-File (Join-Path $ReportDir ($name + ".run.log")) -Encoding utf8
     $verdict = ($rLog -split $NL | Select-String -Pattern "PASS|FAIL|TIMEOUT" | Select-Object -Last 1)
     $txt = if ($verdict) { $verdict.Line.Trim() } else { "(无结论输出)" }
 
@@ -211,6 +235,15 @@ Write-Host ""
 Write-Host ("=" * 78) -ForegroundColor White
 $Results | Format-Table -AutoSize | Out-String -Width 200 | Write-Host
 $bad = @($Results | Where-Object { $_.运行 -ne "通过" })
+$Results | ConvertTo-Json | Out-File (Join-Path $ReportDir "summary.json") -Encoding utf8
+$Sources = $Rtl + $Helpers + ($AllTb | ForEach-Object { $_.FullName })
+$Sources += @(Get-ChildItem (Join-Path $RepoRoot "sw") -File | Where-Object { $_.Extension -in '.c','.s','.ld','.py','.h','.hex' } | ForEach-Object FullName)
+$Sources += @(Get-ChildItem (Join-Path $RepoRoot "fir") -File | Where-Object { $_.Extension -in '.py','.vh' } | ForEach-Object FullName)
+$Sources += $PSCommandPath
+$Sources | Sort-Object -Unique | ForEach-Object {
+    "{0}  {1}" -f (Get-Sha256 $_), $_.Substring($RepoRoot.Length+1)
+} | Set-Content (Join-Path $ReportDir "source-sha256.txt") -Encoding ASCII
+Write-Host ("详细日志: " + $ReportDir)
 if ($Results.Count -eq 0) { Write-Host "没有匹配的测试台" -ForegroundColor Red; exit 1 }
 if ($Results.Count -gt 0 -and $bad.Count -eq 0) {
     Write-Host ("===== 全部通过：{0} 个测试台 =====" -f $Results.Count) -ForegroundColor Green

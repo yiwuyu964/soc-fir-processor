@@ -1,0 +1,70 @@
+
+iverilog  : E:\apps\iverilog\iverilog\bin\iverilog.exe
+仓库根目录: C:\Users\公子\Desktop\project\soc-fir-processor
+
+[0/26] 全量编译检查（RTL + 全部 TB 一起编译）...
+      OK 全量编译通过，无重名模块
+
+wrote C:\Users\����\Desktop\project\soc-fir-processor\sw\probe.hex (40 words)
+[1/26] tb_ahb2axi  通过
+[2/26] tb_axi_checker  通过
+[3/26] tb_axi_ic  通过
+[4/26] tb_axi_id_check  通过
+[5/26] tb_axi_sram  通过
+[6/26] tb_axi_to_apb  通过
+[7/26] tb_dma  通过
+[8/26] tb_dma_engine  通过
+[9/26] tb_dma_ic  通过
+[10/26] tb_dma_precheck  通过
+[11/26] tb_dma_self  通过
+[12/26] tb_fifo_arbiter  通过
+[13/26] tb_fir  通过
+[14/26] tb_fir_asymmetric  通过
+[15/26] tb_fir_core  通过
+[16/26] tb_fir_core_contract  通过
+[17/26] tb_phase5_ahb  通过
+[18/26] tb_phase5_integration  通过
+[19/26] tb_phase5_sram  通过
+[20/26] tb_phase6_fir_dma  通过
+[21/26] tb_soc  通过
+[22/26] tb_soc_bus  通过
+[23/26] tb_soc_probe  通过
+[24/26] tb_sram_offset  通过
+[25/26] tb_uart_apb_edges  通过
+[26/26] tb_uart_echo  通过
+
+==============================================================================
+
+测试台                   编译 运行 结论                                                                                                                                                    
+---                   -- -- --                                                                                                                                                    
+tb_ahb2axi            OK 通过 ===== PASS: 20 项检查全部通过，AXI 协议无违规 =====                                                                                                                
+tb_axi_checker        OK 通过 ===== PASS: 自测 16 项全部通过（不误报、不漏报）=====                                                                                                                 
+tb_axi_ic             OK 通过 ===== PASS：527 项检查全部通过，无死锁 =====                                                                                                                      
+tb_axi_id_check       OK 通过 ===== PASS: 自测 5 项全部通过（不误报、不漏报）=====                                                                                                                  
+tb_axi_sram           OK 通过 ===== PASS: 47 项检查全部通过（正常用例 AXI 协议零违规）=====                                                                                                           
+tb_axi_to_apb         OK 通过 ===== PASS: 27 项检查全部通过，AXI 与 APB 协议均无违规 =====                                                                                                         
+tb_dma                OK 通过 ===== PASS: 69 项检查全部通过，AXI 协议与契约C 零违规 =====                                                                                                           
+tb_dma_engine         OK 通过 ===== PASS: 21 项检查全部通过，AXI 协议零违规 =====                                                                                                                
+tb_dma_ic             OK 通过 ===== PASS: 14 项检查全部通过，DMA×互连 零违规 =====                                                                                                               
+tb_dma_precheck       OK 通过 ===== PASS: DMA constant-time burst precheck equals original per-beat algorithm: 165891 cases =====                                                   
+tb_dma_self           OK 通过 ===== PASS: 70 项检查全部通过，AXI 协议零违规 =====                                                                                                                
+tb_fifo_arbiter       OK 通过 ===== PASS: arbitration stability/fairness and depth-3 FIFO =====                                                                                     
+tb_fir                OK 通过 ===== PASS: bit-exact fixed-point and float RRMSE < 0.1% =====                                                                                        
+tb_fir_asymmetric     OK 通过 ===== PASS: default 82 taps, final-tap impulse, arbitrary asymmetric coefficients, latency, throughput, gaps, live update and flush: 976 results =====
+tb_fir_core           OK 通过 ===== PASS: 337 个样本与黄金模型逐位一致 =====                                                                                                                    
+tb_fir_core_contract  OK 通过 ===== PASS: 契约 A 全部 8 项自检通过 =====                                                                                                                     
+tb_phase5_ahb         OK 通过 ===== PASS: AHB all HBURST x HSIZE, BUSY, stalls, errors =====                                                                                        
+tb_phase5_integration OK 通过 ===== PASS: CPU-free FIR+DMA+interconnect seed=1 =====                                                                                                
+tb_phase5_sram        OK 通过 ===== PASS: phase5 SRAM directed boundaries and scoreboard =====                                                                                      
+tb_phase6_fir_dma     OK 通过 ===== PASS: FIR x DMA bit-exact to fixed-point reference (float RRMSE checked separately) =====                                                       
+tb_soc                OK 通过 ===== PASS: 13 项检查全部通过，UART 回显闭环正常 =====                                                                                                              
+tb_soc_bus            OK 通过 ===== PASS: reserved DECERR and DMA SRAM/UART both directions =====                                                                                   
+tb_soc_probe          OK 通过 ===== PASS: CPU-to-UART probe, 10 TX edges =====                                                                                                      
+tb_sram_offset        OK 通过 ===== PASS: SRAM base-relative indexing and stalled reads =====                                                                                       
+tb_uart_apb_edges     OK 通过 ===== PASS: APB consecutive setup, strobe, busy and empty RX =====                                                                                    
+tb_uart_echo          OK 通过 ===== PASS: 23 项检查全部通过，UART 回显闭环正常 =====                                                                                                              
+
+
+
+详细日志: C:\Users\公子\Desktop\project\soc-fir-processor\build\sim
+===== 全部通过：26 个测试台 =====

@@ -1,13 +1,13 @@
 """从 fir/ 的黄金模型向量生成 C 头文件（阶段6 软硬件协同用）。
 
 数据来源（fir/fir_coeff.py 产出，契约 D/E）：
-  fir/coeffs.hex  81 个系数（Q1.15）
+  fir/coeffs.hex  82 个系数（Q1.15）
   fir/stim.hex    256 个输入样本
-  fir/exp.hex     336 个期望输出（完整卷积）
+  fir/exp.hex     337 个期望输出（完整卷积）
 
 固件侧的用法：
-  推 336 个样本（256 真实 + 80 补零）进 FIR → 得到 337 个结果，
-  其中 results[1..336] 与 exp[0..335] 逐位一致（results[0] 是 flush 后的前导 0）。
+  推 338 个样本（256 真实 + 82 补零）进 FIR → 得到 338 个结果，
+  其中 results[1..337] 与 exp[0..336] 逐位一致（results[0] 是 flush 后的前导 0）。
 
 用法：  python sw/gen_testvec.py
 输出：  sw/fir_testvec.h
@@ -43,14 +43,14 @@ def main():
     coef = load("coeffs.hex", root)
     stim = load("stim.hex", root)
     exp = load("exp.hex", root)
-    assert len(coef) == 81, len(coef)
+    assert len(coef) == 82, len(coef)
     assert len(stim) == 256, len(stim)
-    assert len(exp) == 336, len(exp)
+    assert len(exp) == len(stim) + len(coef) - 1, len(exp)
 
     # 实测规律：FIR 是「N 个样本入 -> N 个结果出」，且第一个结果是 flush 后的前导 0。
-    # 所以想拿到 exp 的 336 个有效结果，需要推 336+1 = 337 个样本（256 真实 + 81 补零）。
+    # 所以想拿到 exp 的 337 个有效结果，需要推 337+1 = 338 个样本（256 真实 + 82 补零）。
     samples = stim + [0x0000] * (len(exp) - len(stim) + 1)
-    assert len(samples) == 337
+    assert len(samples) == 338
     # DMA 按 32 位字搬，样本放低 16 位
     words = [s & 0xFFFF for s in samples]
 

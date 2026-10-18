@@ -9,7 +9,7 @@
 //
 // 接口：
 //   wen/wdata : 写一个数（wen 拉高一拍）
-//   ren       : 读一个数（ren 拉高一拍，下一拍 rdata 有效）
+//   ren       : 消费当前队首；rdata 为组合队首，empty=0 时有效
 //   full/empty: 满/空标志（满了不能再写，空了不能读）
 //
 // 实现：一块寄存器阵列 + 写指针 + 读指针 + 计数器。
@@ -46,7 +46,13 @@ module sync_fifo #(
     assign rdata = mem[rd_ptr];
     assign count = cnt;
 
-    integer i;
+    // No asynchronous control on the storage write port: infer ordinary
+    // portable RAM (asynchronous read / first-word fall-through). Reset and
+    // clear invalidate entries through cnt, without resetting the array.
+    always @(posedge clk) begin
+        if (rst_n && !clr && wen && !full) mem[wr_ptr] <= wdata;
+    end
+
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             wr_ptr <= {PTR_W{1'b0}};
@@ -61,7 +67,6 @@ module sync_fifo #(
         else begin
             case ({wen && !full, ren && !empty})
                 2'b10: begin                       // 只写
-                    mem[wr_ptr] <= wdata;
                     wr_ptr <= (wr_ptr == DEPTH-1) ? 0 : wr_ptr + 1'b1;
                     cnt    <= cnt + 1'b1;
                 end
@@ -70,7 +75,6 @@ module sync_fifo #(
                     cnt    <= cnt - 1'b1;
                 end
                 2'b11: begin                       // 同时读写
-                    mem[wr_ptr] <= wdata;
                     wr_ptr <= (wr_ptr == DEPTH-1) ? 0 : wr_ptr + 1'b1;
                     rd_ptr <= (rd_ptr == DEPTH-1) ? 0 : rd_ptr + 1'b1;
                     // cnt 不变

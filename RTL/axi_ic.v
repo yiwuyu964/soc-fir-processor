@@ -636,6 +636,9 @@ module axi_ic #(
         if (!rst_n) begin
             def_w_busy <= 1'b0;
             def_bvalid <= 1'b0;
+            def_w_id   <= {ID_W{1'b0}};
+            def_w_len  <= 8'd0;
+            def_w_beat <= 8'd0;
         end
         else begin
             if (m_awvalid[5] && m_awready[5]) begin
@@ -669,6 +672,9 @@ module axi_ic #(
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             def_r_busy <= 1'b0;
+            def_r_id   <= {ID_W{1'b0}};
+            def_r_len  <= 8'd0;
+            def_r_beat <= 8'd0;
         end
         else begin
             if (m_arvalid[5] && m_arready[5]) begin

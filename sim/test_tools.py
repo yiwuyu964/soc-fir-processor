@@ -14,10 +14,26 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'fir'))
 sys.path.insert(0, str(ROOT / 'sw'))
 import fir_coeff
+import fir_fixedpoint_analysis
 import build
 
 
 class ToolTests(unittest.TestCase):
+    def test_even_and_odd_folding_bounds_match_direct_worst_case(self):
+        for taps in (81, 82):
+            report = fir_fixedpoint_analysis.width_report([-32768] * taps, 16, 16)
+            self.assertEqual(report['sym_worst_any'], taps * (1 << 30))
+            self.assertEqual(report['sym_worst_this'], taps * (1 << 30))
+            self.assertEqual(report['sym_center'], -32768 if taps % 2 else 0)
+
+    def test_judge_rrmse_definition_and_zero_reference(self):
+        self.assertAlmostEqual(fir_coeff.relative_rmse([16384, -16384], [0.5, -0.5]), 0)
+        self.assertAlmostEqual(fir_coeff.relative_rmse([16384, 16384], [1.0, 1.0]), 0.5)
+        self.assertEqual(fir_coeff.relative_rmse([0], [0.0]), 0)
+        self.assertTrue(math.isinf(fir_coeff.relative_rmse([1], [0.0])))
+        with self.assertRaises(ValueError):
+            fir_coeff.relative_rmse([1, 2], [1.0])
+
     def test_generated_header_is_valid_verilog(self):
         iv = os.environ.get('IVERILOG') or shutil.which('iverilog')
         if not iv:
@@ -67,6 +83,7 @@ class ToolTests(unittest.TestCase):
                 return subprocess.run(base+['--check',str(got)],
                                       stdout=subprocess.DEVNULL).returncode
             self.assertEqual(check(['0000']+exp), 0)
+            self.assertNotEqual(check(['0001']+exp), 0)
             self.assertNotEqual(check(['0000']+exp[:-1]), 0)
             wrong = exp.copy()
             wrong[20] = '1234' if wrong[20] != '1234' else '5678'

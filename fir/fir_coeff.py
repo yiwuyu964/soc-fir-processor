@@ -4,7 +4,7 @@
 fir_coeff.py —— FIR 系数设计 + 黄金模型 + 测试向量生成（契约 D / E，C 的分工）
 
 依据 docs 里的契约：
-  · 契约 A（阶段1-接口契约）：CW=16、DW=16、AW=40、NTAP=81，A6 定点规则
+  · 契约 A（阶段1-接口契约）：CW=16、DW=16、AW=40、NTAP=82，A6 定点规则
   · 契约 D（系数文件格式）：coeffs.vh / coeffs.hex
   · 契约 E（测试向量格式）：stim.hex / exp.hex（全卷积，NSAMP+NTAP-1）
 
@@ -21,7 +21,7 @@ fir_coeff.py —— FIR 系数设计 + 黄金模型 + 测试向量生成（契�
 
 用法：
     python fir/fir_coeff.py                          # 默认 81 阶 / 截止 0.12 / 256 样本
-    python fir/fir_coeff.py --taps 81 --cutoff 0.12 --nsamp 256
+    python fir/fir_coeff.py --taps 82 --cutoff 0.12 --nsamp 256
     python fir/fir_coeff.py --window hann            # 对比不同窗函数
     python fir/fir_coeff.py --check got.hex          # 校验 RTL 导出的结果
 """
@@ -69,7 +69,7 @@ def design_lowpass(ntap, fc, window="hamming"):
     """
     线性相位低通 FIR。
 
-    ntap  : 抽头数（81）
+    ntap  : 抽头数（82）
     fc    : 归一化截止频率，0 < fc < 1，1.0 = Nyquist（与 scipy.signal.firwin 同约定）
     window: 窗函数名
 
@@ -79,10 +79,6 @@ def design_lowpass(ntap, fc, window="hamming"):
                    = fc                                       (n = M/2)
     再乘窗、再归一化使 Σh = 1.0（直流增益 = 1）。
     """
-    if ntap % 2 == 0:
-        print("[提示] 抽头数为偶数，群延迟 = %.1f 个样本（半样本延迟）；赛题用奇数 81，"
-              "建议保持奇数。" % ((ntap - 1) / 2.0))
-
     if HAS_SCIPY:
         h = list(_scipy_firwin(ntap, fc, window=window))
     else:
@@ -220,7 +216,7 @@ def read_hex(path, bits=16):
 
 
 def write_coeffs_vh(path, coeffs, cw=16):
-    """生成 Verilog 头文件（契约 D.3：H0~H80，localparam signed [15:0]）。"""
+    """生成 Verilog 头文件（契约 D.3：H0~H81，localparam signed [15:0]）。"""
     lines = [
         "// ============================================================",
         "// 本文件由 fir/fir_coeff.py 自动生成，不要手动修改",
@@ -240,7 +236,7 @@ def write_coeffs_vh(path, coeffs, cw=16):
 def error_report(y_fixed, y_float, q=15):
     """误差报告：返回三个口径，全部透明给出，不做任何"重定义"。
 
-    1) 最大绝对误差（占满量程 1.0）—— 与赛题「误差 < 0.1%」对应的标准口径
+    1) 最大绝对误差（占满量程 1.0）—— 辅助口径，比赛采用 relative_rmse
     2) 最大相对误差（相对信号峰值）—— 误差占信号幅度的比例（有意义的相对误差）
     3) 逐点最大相对误差           —— 含阻带近零，会被近零参考放大，仅作参考
     """
@@ -253,8 +249,22 @@ def error_report(y_fixed, y_float, q=15):
     thresh_lsb = 1.0 / scale                                  # 1 LSB
     rel_pointwise = [abs(yf / scale - yfl) / abs(yfl)
                      for yf, yfl in zip(y_fixed, y_float) if abs(yfl) > thresh_lsb]
-    max_rel_pointwise = max(rel_pointwise)                    # 逐点（含阻带近零）
+    max_rel_pointwise = max(rel_pointwise, default=0.0)        # 逐点（含阻带近零）
     return max_abs, max_rel_peak, max_rel_pointwise
+
+
+def relative_rmse(y_fixed, y_float, q=15):
+    """sqrt(sum((fixed/2**q-reference)**2) / sum(reference**2)).
+
+    Compare the complete aligned sequence, including tail samples. A zero
+    reference has zero error only when the measured sequence is also zero.
+    """
+    if len(y_fixed) != len(y_float) or not y_float:
+        raise ValueError("RRMSE requires equal, nonempty sequences")
+    scale = float(1 << q)
+    error = sum((fixed / scale - ref)**2 for fixed, ref in zip(y_fixed, y_float))
+    energy = sum(ref**2 for ref in y_float)
+    return math.sqrt(error / energy) if energy else (0.0 if error == 0 else math.inf)
 
 
 # ----------------------------------------------------------------------
@@ -262,7 +272,7 @@ def error_report(y_fixed, y_float, q=15):
 # ----------------------------------------------------------------------
 def main():
     ap = argparse.ArgumentParser(description="FIR 系数设计 + 黄金模型 + 测试向量生成")
-    ap.add_argument("--taps", type=int, default=81, help="抽头数（默认 81）")
+    ap.add_argument("--taps", type=int, default=82, help="抽头数（默认 82，即 81 阶）")
     ap.add_argument("--cutoff", type=float, default=0.12, help="归一化截止频率（默认 0.12）")
     ap.add_argument("--nsamp", type=int, default=256, help="测试样本数（默认 256）")
     ap.add_argument("--window", type=str, default="hamming", help="窗函数（hamming/hann/blackman）")
@@ -299,6 +309,9 @@ def main():
         exp = golden_fixed(samples, coeffs)
         print("\nRTL 导出 %d 个，黄金模型期望 %d 个" % (len(got), len(exp)))
         if len(got) > 1:
+            if got[0] != 0:
+                print("FAIL: leading result must be zero after flush")
+                sys.exit(1)
             got = got[1:]                        # 跳过流水线前导 0（契约 E.6）
         if len(got) != len(exp):
             print("FAIL: sample count mismatch: %d != %d" % (len(got), len(exp)))
@@ -306,13 +319,20 @@ def main():
         n = len(exp)
         bad = [(i, got[i], exp[i]) for i in range(n) if got[i] != exp[i]]
         if not bad:
-            print("\n===== PASS：前 %d 个样本与黄金模型逐位一致 =====" % n)
+            print("\nRTL bit-exact: %d samples" % n)
         else:
             print("\n===== FAIL：%d / %d 个样本不一致 =====" % (len(bad), n))
             for i, g, e in bad[:10]:
                 print("   样本 %3d：RTL = %6d，期望 = %6d" % (i, g, e))
         if bad:
             sys.exit(1)
+        ref_float = golden_float(make_stimulus(len(samples)), h)
+        rrms = relative_rmse(got, ref_float)
+        print("RTL vs unquantized float RRMSE = %.6f%%" % (100 * rrms))
+        if rrms >= 0.001:
+            print("FAIL: RTL relative RMS error exceeds 0.1%")
+            sys.exit(1)
+        print("===== PASS: bit-exact fixed-point and float RRMSE < 0.1% =====")
         return
 
     # ---- 生成模式 ----
@@ -328,8 +348,10 @@ def main():
     print("  最大相对误差（相对信号峰值）  = %.6f%%" % (max_rel_peak * 100))
     print("  逐点最大相对误差（含阻带近零）= %.3f%%（被近零参考放大，不采用）"
           % (max_rel_pt * 100))
-    ok = max_abs < 0.001
-    print("  赛题要求 < 0.1%%（按占满量程的绝对误差）→  %s"
+    rrms = relative_rmse(y_fixed, y_float)
+    print("  相对均方根误差 RRMSE         = %.6f%%" % (rrms * 100))
+    ok = rrms < 0.001
+    print("  赛题要求 < 0.1%%（评委确认：相对均方根误差）→  %s"
           % ("✅ 达标" if ok else "❌ 不达标"))
 
     # ---- 写文件 ----
@@ -345,6 +367,8 @@ def main():
     print("  stim.hex    (%d 个激励样本)" % len(x_int))
     print("  exp.hex     (%d 个期望输出 = %d+%d-1 全卷积)" % (len(y_fixed), nsamp, ntap))
     print("\n注意：*.hex 已被 .gitignore 排除（不进 git），需要时重跑本脚本重新生成。")
+    if not ok:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

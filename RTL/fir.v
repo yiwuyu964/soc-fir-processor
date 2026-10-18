@@ -19,7 +19,7 @@
 //   DOUT    @0x008        R  读一个滤波结果（低 16bit），弹出输出 FIFO
 //   STATUS  @0x00C        R  [31:16]fifo_count / [3]err / [2]done
 //                            [1]fifo_full / [0]fifo_empty（位定义见任务三 4.1）
-//   COEF[k] @0x100 + 4k   W  第 k 个系数（k=0..80），占 0x100 ~ 0x243
+//   COEF[k] @0x100 + 4k   W  第 k 个系数（k=0..81），占 0x100 ~ 0x247
 //
 // ============================================================
 // 【中断】（契约 B / 任务三 4.1，已确认 [2]=done、[3]=err）
@@ -69,7 +69,7 @@
 // ============================================================
 // 【验证】TB/tb_fir.v
 // ============================================================
-//   单拍读写 / INCR 写突发（81 拍系数）/ INCR 读突发（DOUT+STATUS+RLAST）/
+//   单拍读写 / INCR 写突发（82 拍系数）/ INCR 读突发（DOUT+STATUS+RLAST）/
 //   FIXED 突发（256 拍 DIN、多拍 DOUT 排空）/ WSTRB（字节 flush、半字 DIN、
 //   空写）/ 错误响应（WRAP、SIZE>2、非法地址、访问类型、跨 4KB）/ 中断
 //   （done 置位清除、err 读空、FIFO 溢出）/ 336 个结果与黄金模型逐位一致。
@@ -83,7 +83,7 @@ module fir #(
     parameter DW         = 16,       // fir_core 数据位宽 Q1.15
     parameter CW         = 16,       // fir_core 系数位宽 Q1.15
     parameter AW         = 40,       // fir_core 累加器位宽
-    parameter NTAP       = 81,       // 抽头数
+    parameter NTAP       = 82,       // 81st order = 82 independently writable taps
     parameter FIFO_DEPTH = 512       // 输出 FIFO 深度（容纳 337 个结果绰绰有余）
 )(
     input  wire                 clk,
@@ -144,7 +144,7 @@ module fir #(
     localparam [11:0] OFF_DOUT   = 12'h008;   // DOUT
     localparam [11:0] OFF_STATUS = 12'h00C;   // STATUS
     localparam [11:0] OFF_COEF   = 12'h100;   // COEF[0]
-    localparam [11:0] OFF_COEF_END = OFF_COEF + 4*(NTAP-1) + 3;   // COEF[80] 末字节 = 0x243
+    localparam [11:0] OFF_COEF_END = OFF_COEF + 4*(NTAP-1) + 3;   // COEF[81] 末字节 = 0x247
 
     localparam CNT_W = $clog2(FIFO_DEPTH+1);  // FIFO 计数位宽（DEPTH=512 → 10）
 
@@ -206,7 +206,7 @@ module fir #(
     //    规则：整笔突发的字节范围必须完全落在【同一类合法区域】内，
     //    否则整笔 SLVERR 且无副作用。区域检查天然保证"突发不跨 4KB"。
     // ============================================================
-    // ---- 写侧：合法区域 = CTRL[0,3] / DIN[4,7] / COEF[0x100, 0x243] ----
+    // ---- 写侧：合法区域 = CTRL[0,3] / DIN[4,7] / COEF[0x100, 0x247] ----
     wire [13:0] w_nbeats = {6'd0, s_axi_awlen} + 14'd1;
     wire [13:0] w_bytes  = (s_axi_awburst == BURST_FIXED) ? (14'd1 << s_axi_awsize)
                                                           : (w_nbeats << s_axi_awsize);

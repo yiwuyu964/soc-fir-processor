@@ -1,15 +1,15 @@
 # 契约 D：系数文件格式（C 生成，A/B 消费）
 
 > 本契约定义 FIR 81 阶系数的**文件格式**。C 生成、A/B 消费，冻结后谁都不许私改。
-> 依据：[阶段1-接口契约（冻结版）.md](阶段1-接口契约（冻结版）.md) 契约 A（`CW=16`、`NTAP=81`）、契约 C（`COEF[k]`，k=0..80）。
-> 状态：✅ 已冻结（v1）。
+> 依据：[阶段1-接口契约（冻结版）.md](阶段1-接口契约（冻结版）.md) 契约 A（`CW=16`、`NTAP=82`）、契约 C（`COEF[k]`，k=0..81）。
+> 版本：v2，按评委问答更正为 81 阶 / 82 抽头，端口和 5 拍流水延迟不变。
 
 ---
 
 ## D.0 范围
 
 - 本契约只定义两个**系数文件**：`fir/coeffs.vh`、`fir/coeffs.hex`。
-- 两者内容**完全相同**（同一组 81 个系数），仅编码方式不同。
+- 两者内容**完全相同**（同一组 82 个系数），仅编码方式不同。
 - 测试向量 `stim.hex` / `exp.hex` 见 [契约E_测试向量格式.md](契约E_测试向量格式.md)。
 
 ## D.1 量化约定（Q1.15，依据契约 A 的 CW=16）
@@ -24,13 +24,13 @@
 
 - **H0 = h[0] = 当前样本 x[n] 的系数（延迟链第 0 级）**。
 - **Hk = h[k] = x[n−k] 的系数（延迟链第 k 级）**。
-- **H80 = h[80] = 最老样本 x[n−80] 的系数（延迟链第 80 级）**。
-- 卷积定义：`y[n] = Σ_{k=0}^{80} h[k] · x[n−k]`（scipy.signal.firwin 的天然顺序）。
+- **H81 = h[81] = 最老样本 x[n−81] 的系数（延迟链第 81 级）**。
+- 卷积定义：`y[n] = Σ_{k=0}^{81} h[k] · x[n−k]`（scipy.signal.firwin 的天然顺序）。
 - 索引对应：`coef_idx=k` ↔ `Hk` ↔ `h[k]` ↔ 契约 C 的 `COEF[k]`（地址 `0x100 + 4·k`）。
 
 ## D.3 `coeffs.vh`（Verilog 头文件）
 
-- 81 行，每行一个 `localparam`，命名 `H0`…`H80`（**下标从 0 开始，不补零**：是 `H0` 不是 `H00`）。
+- 82 行，每行一个 `localparam`，命名 `H0`…`H81`（**下标从 0 开始，不补零**：是 `H0` 不是 `H00`）。
 - 语法：`localparam signed [15:0] Hk = 16'sd<十进制有符号>;`
 - 值 = `round(浮点系数 × 32768)`，clamp 到 int16 范围。
 - 示例（首尾，数值与 PDF 示意一致）：
@@ -40,13 +40,13 @@
 localparam signed [15:0] H0  = 16'sd20;
 localparam signed [15:0] H1  = -16'sd20;
 // ... 中间省略 ...
-localparam signed [15:0] H80 = 16'sd20;
+localparam signed [15:0] H81 = 16'sd20;
 ```
 
 ## D.4 `coeffs.hex`（十六进制补码文本，供 `$readmemh`）
 
-- 81 行，每行**恰好 4 个十六进制字符**（16-bit 二进制补码），无前缀、无注释、无分隔符。
-- 顺序与 `coeffs.vh` 完全一致：第 1 行 = H0，第 81 行 = H80。
+- 82 行，每行**恰好 4 个十六进制字符**（16-bit 二进制补码），无前缀、无注释、无分隔符。
+- 顺序与 `coeffs.vh` 完全一致：第 1 行 = H0，第 82 行 = H81。
 - 末尾允许且仅允许一个换行符。
 - 示例（对应 D.3）：
 
@@ -60,9 +60,9 @@ FFEC
 - 消费方式：
 
 ```verilog
-reg [15:0] coeff_mem [0:80];
+reg [15:0] coeff_mem [0:81];
 $readmemh("fir/coeffs.hex", coeff_mem);
-// 读取后 coeff_mem[k] == Hk（k=0..80）
+// 读取后 coeff_mem[k] == Hk（k=0..81）
 ```
 
 > ⚠️ `.gitignore` 已排除 `*.hex`，所以 `coeffs.hex` **不进 git**，需要时由脚本重新生成；
@@ -85,7 +85,7 @@ $readmemh("fir/coeffs.hex", coeff_mem);
 ## D.7 生成命令
 
 ```
-python fir/fir_coeff.py --taps 81 --cutoff 0.12 --nsamp 256
+python fir/fir_coeff.py --taps 82 --cutoff 0.12 --nsamp 256
 ```
 
 ## D.8 `fir_data.h`（C 头文件，供 C 驱动，阶段 6 用；阶段 1 可选）
@@ -96,7 +96,7 @@ python fir/fir_coeff.py --taps 81 --cutoff 0.12 --nsamp 256
 
 ```c
 /* 由 fir/fir_coeff.py 自动生成，勿手改 */
-static const int16_t fir_coeffs[81] = { 20, 20, -9, /* ... */ };
+static const int16_t fir_coeffs[82] = { 20, 20, -9, /* ... */ };
 ```
 
 - 状态：⬜ 待确认是否本阶段生成（冻结版建议生成，可留到阶段 6）。
