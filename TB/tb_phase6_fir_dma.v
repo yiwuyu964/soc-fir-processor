@@ -32,8 +32,16 @@ module tb_phase6_fir_dma;
               .SRAM_BYTES(SRAM_BYTES),.CLK_FREQ(100_000_000),.UART_DIV(10)) dut (
         .clk(clk), .rst_n(rst_n), .uart_txd(uart_txd), .uart_rxd(uart_rxd));
 
-    integer errors = 0, i, waited, fh, have_exp;
-    reg [15:0] exp_mem [0:335];
+    integer errors = 0, i, waited;
+
+    // 波形：sim.cmd 默认会删掉 .vcd，想看就加 -KeepVcd
+    // 本台要跑约 8 万拍，全层次 dump 会到 200MB+；这里只 dump soc_top 顶层
+    // （AHB/AXI 总线信号），体积小得多，看总线时序足够了。
+    // 想看内部模块就把 1 改成 0。
+    initial begin
+        $dumpfile("tb_phase6_fir_dma.vcd");
+        $dumpvars(1, dut);
+    end
 
     task chk(input [31:0] got, input [31:0] want, input [255:0] name);
         begin
@@ -46,14 +54,10 @@ module tb_phase6_fir_dma;
     endtask
 
     initial begin
-        // 可选的"与黄金模型文件交叉核对"：sim 流程可能在别的工作目录跑仿真，
-        // 那里只有 sw/ 而没有 fir/，此时跳过这两项（固件内部已完成 336 拍逐位比对）。
-        fh = $fopen("fir/exp.hex", "r");
-        have_exp = (fh != 0);
-        if (have_exp) begin
-            $fclose(fh);
-            $readmemh("fir/exp.hex", exp_mem);
-        end
+        // 判据完全来自固件写进信箱的结果（MB[7]/MB[8]/MB[9]），
+        // 不在这里读 fir/exp.hex 做交叉核对：那份文件是本地生成产物
+        // （不在版本控制里），可能过期，拿它比对会把"数据陈旧"误报成"RTL 错"。
+        // 固件内部已经用 sw/fir_testvec.h 做了 336 拍逐位比对，那才是权威判据。
         for (i=0;i<SW_DEPTH;i=i+1) dut.u_sram.mem[i] = 32'h0;
         $readmemh("sw/firmware.hex", dut.u_sram.mem);
 
@@ -84,16 +88,10 @@ module tb_phase6_fir_dma;
         chk(dut.u_sram.mem[MB+7] & 32'h4, 32'h4, "results[1..336] 与黄金模型逐位一致");
         chk(dut.u_sram.mem[MB+7] >> 16, 32'h0, "错拍数 = 0");
 
-        // 与黄金模型文件交叉核对首/末结果（仅在向量文件可见时做）
+        // 首/末结果作为诊断信息打印（权威判据是 MB[7] 的比对结论）
         $display("");
-        if (have_exp) begin
-            chk(dut.u_sram.mem[MB+8] & 32'hFFFF, {16'd0, exp_mem[0]},   "results[1]   == exp[0]");
-            chk(dut.u_sram.mem[MB+9] & 32'hFFFF, {16'd0, exp_mem[335]}, "results[336] == exp[335]");
-        end else begin
-            $display("  (fir/exp.hex 不在运行目录，跳过首/末结果的文件交叉核对)");
-            $display("  results[1]=0x%08X  results[336]=0x%08X",
-                     dut.u_sram.mem[MB+8], dut.u_sram.mem[MB+9]);
-        end
+        $display("  诊断：results[1]=0x%08X  results[336]=0x%08X",
+                 dut.u_sram.mem[MB+8], dut.u_sram.mem[MB+9]);
 
         $display("");
         $display("============================================");
