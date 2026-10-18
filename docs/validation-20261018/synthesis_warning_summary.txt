@@ -1,0 +1,10 @@
+Synth 8-6014: 1 occurrences
+  Unused sequential element wait_cnt_reg was removed.  [C:/Windows/Temp/soc_check_932b2fbda2f94556a8b14a3376d91298/RTL/axi_to_apb.v:242]
+Synth 8-6841: 2 occurrences
+  Block RAM (mem_reg) originally specified as a Byte Wide Write Enable RAM cannot take advantage of ByteWide feature and is implemented with single write enable per RAM due to following reason.
+Synth 8-7023: 1 occurrences
+  instance 'u_cpu' of module 'cortexm0ds_logic' has 44 connections declared, but only 22 given [C:/Windows/Temp/soc_check_932b2fbda2f94556a8b14a3376d91298/RTL/soc_top.v:205]
+Synth 8-7071: 22 occurrences
+  port 'vis_r0_o' of module 'cortexm0ds_logic' is unconnected for instance 'u_cpu' [C:/Windows/Temp/soc_check_932b2fbda2f94556a8b14a3376d91298/RTL/soc_top.v:205]
+Synth 8-7129: 100 occurrences
+  Port pwdata[31] in module uart_apb is either unconnected or has no load

@@ -343,12 +343,14 @@ module dma #(
     // ============================================================
     // 契约 C 断言：DMA 主口 ID 最低位恒为 1（不改写，原样透传自引擎）
     // ============================================================
+`ifndef SYNTHESIS
     always @(posedge clk) begin
         if (rst_n && m_axi_awvalid && (m_axi_awid[0] !== 1'b1))
             $display("  [契约C违规] t=%0t AWID=%b 最低位不是 1", $time, m_axi_awid);
         if (rst_n && m_axi_arvalid && (m_axi_arid[0] !== 1'b1))
             $display("  [契约C违规] t=%0t ARID=%b 最低位不是 1", $time, m_axi_arid);
     end
+`endif
 
     // 链式传输预留（本阶段不实现）：若实现，需在 cfg_ctrl 高位加 CHAIN_EN/CHAIN_NEXT，
     // 并为引擎补 chain_en/chain_next/chain_trig 端口，由下一通道的 chain_trig 当 start。

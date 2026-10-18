@@ -2,13 +2,13 @@
 // tb_fir_core.v —— fir_core 全量回归（与软件黄金模型逐位比对）
 //
 // 验的是【数值正确性】，和 TB/tb_fir_core_contract.v（验行为约定）分工不同：
-//   本文件      ：81 阶 × 256 个样本，和黄金模型的 336 个输出逐位比对
+//   本文件      ：81 阶 × 256 个样本，和黄金模型的 337 个输出逐位比对
 //   契约自检台  ：只验 A1~A6 六条接口约定，不依赖外部文件
 //
 // 数据来源（在 fir/ 目录下，由 fir/fir_coeff.py 生成，见契约 D/E）：
-//   coeffs.hex  81 个 Q1.15 系数（测试台通过 coef 写口写进去，不 `include）
+//   coeffs.hex  82 个 Q1.15 系数（测试台通过 coef 写口写进去，不 `include）
 //   stim.hex    256 个输入样本
-//   exp.hex     336 个期望输出（全卷积长度 = 样本数 + 抽头数 - 1）
+//   exp.hex     337 个期望输出（全卷积长度 = 样本数 + 抽头数 - 1）
 //
 // 运行（从仓库根目录）：
 //   python fir/fir_coeff.py --taps 81 --cutoff 0.12 --nsamp 256
@@ -26,10 +26,10 @@ module tb_fir_core;
     localparam DW    = 16;
     localparam CW    = 16;
     localparam AW    = 40;
-    localparam NTAP  = 81;
+    localparam NTAP  = 82;
     localparam LAT   = 5;                       // 契约 A2
     localparam NSAMP = 256;
-    localparam NEXP  = NSAMP + NTAP - 1;        // 全卷积长度 = 336
+    localparam NEXP  = NSAMP + NTAP - 1;        // 全卷积长度 = 337
 
     reg  clk = 0;
     reg  rst_n = 0;
@@ -102,7 +102,7 @@ module tb_fir_core;
         $display("========== fir_core 全量回归（81 阶 vs 黄金模型）==========");
 
         // ----------------------------------------------------
-        // 1) 通过 coef 写口写入 81 个系数（契约 A5）
+        // 1) 通过 coef 写口写入 82 个系数（契约 A5）
         // ----------------------------------------------------
         $display("[1] 通过 coef 端口写入 %0d 个系数", NTAP);
         for (i = 0; i < NTAP; i = i + 1) begin

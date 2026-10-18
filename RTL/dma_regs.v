@@ -135,23 +135,19 @@ module dma_regs #(
         end
     endfunction
 
-    // 整笔写突发预检：任一拍落到非法区 → 0
+    // The legal register bank is one contiguous interval. For monotonic
+    // INCR addresses, legal first/last beats imply every beat is legal.
+    // Do not unroll a runtime-length loop into 256 serial legality checks.
     function f_wburst_ok;
         input [ADDR_W-1:0] a;
         input [1:0]        b;
         input [LEN_W-1:0]  l;
         input [2:0]        sz;
-        integer k;
-        integer step;
-        reg [ADDR_W-1:0] ak;
+        reg [ADDR_W:0] last_addr;
         begin
-            f_wburst_ok = 1'b1;
-            step = 1 << sz;
-            for (k = 0; k <= l; k = k + 1) begin
-                if (b == BURST_FIXED) ak = a;
-                else                  ak = a + (k * step);
-                if (!f_legal(ak))     f_wburst_ok = 1'b0;
-            end
+            last_addr = {1'b0,a} + ({{(ADDR_W+1-LEN_W){1'b0}},l} << sz);
+            f_wburst_ok = f_legal(a) && ((b == BURST_FIXED) ||
+                         (!last_addr[ADDR_W] && f_legal(last_addr[ADDR_W-1:0])));
         end
     endfunction
 

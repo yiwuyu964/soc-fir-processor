@@ -1,0 +1,36 @@
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2026 Advanced Micro Devices, Inc. All Rights Reserved.
+---------------------------------------------------------------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2026.1 (win64) Build 6511674 Tue Jun 16 11:02:23 MDT 2026
+| Date         : Sun Oct 18 10:12:07 2026
+| Host         : LAPTOP-RI0QADEP running 64-bit major release  (build 9200)
+| Command      : report_methodology -file route_methodology.rpt
+| Design       : soc_top
+| Device       : xc7z020clg400-1
+| Speed File   : -1
+| Design State : Fully Routed
+---------------------------------------------------------------------------------------------------------------------------------------------
+
+Report Methodology
+
+Table of Contents
+-----------------
+1. REPORT SUMMARY
+2. REPORT DETAILS
+
+1. REPORT SUMMARY
+-----------------
+            Netlist: soc_top
+          Floorplan: design_1
+      Design limits: <entire design considered>
+             Max checks: <unlimited>
+             Checks found: 3972
++----------+----------+--------------------------------------------+--------+
+| Rule     | Severity | Description                                | Checks |
++----------+----------+--------------------------------------------+--------+
+| DPIR-1   | Warning  | Asynchronous driver check                  | 3936   |
+| SYNTH-6  | Warning  | Timing of a RAM block might be sub-optimal | 16     |
+| SYNTH-10 | Warning  | Wide multiplier                            | 3      |
+| SYNTH-15 | Warning  | Byte wide write enable not inferred        | 16     |
+| XDCH-2   | Warning  | Same min and max delay values on IO port   | 1      |
++----------+----------+--------------------------------------------+--------+
+

@@ -1,0 +1,37 @@
+﻿VCD info: dumpfile tb_fir.vcd opened for output.
+
+========== FIR AXI4 从接口 + 中断 单元测试 ==========
+[1] 复位后 STATUS 初始值
+[2] 单拍写 CTRL=1（flush）
+[3] 单拍写 COEF[0]=16384
+[4] 冲激响应与 irq_done
+[5] 饱和（契约 A6 经 AXI 路径）
+[6] 读空错误（irq_err）
+[7] WSTRB 写选通
+[8] 错误响应
+[9] INCR 写突发下发 82 个系数
+[10] FIXED 写突发下发 256 个样本 + 82 个排空 0
+[11] 结果就绪与 irq_done
+[12] INCR 读突发（DOUT + STATUS）
+[13] 全量回读 337 个结果，与黄金模型逐位比对
+[14] 回读完毕后的 STATUS
+[15] FIFO 溢出错误（irq_err）
+[16] 复位健壮性
+
+============================================
+===== PASS: 1002 项检查全部通过，AXI 协议无违规 =====
+============================================
+C:\Users\����\Desktop\project\soc-fir-processor\TB\tb_fir.v:674: $finish called at 48275000 (1ps)
+================================================================
+FIR 设计：抽头 = 82，截止 = 0.120（归一化到 Nyquist），窗 = hamming
+设计路径：内置窗函数法（与 firwin 等价）
+================================================================
+Σh（量化） = 32766  （理想 32768 = 1.0，偏差 -0.0061%）
+系数范围  = -697 .. 3898
+线性相位对称 = 成立 h[k]==h[N-1-k]
+
+RTL 导出 338 个，黄金模型期望 337 个
+
+RTL bit-exact: 337 samples
+RTL vs unquantized float RRMSE = 0.010466%
+===== PASS: bit-exact fixed-point and float RRMSE < 0.1% =====

@@ -65,7 +65,7 @@ module soc_top #(
     // ============================================================
     // 0. 复位：异步置位、同步释放
     // ============================================================
-    reg [1:0] rst_sync;
+    (* ASYNC_REG = "TRUE" *) reg [1:0] rst_sync;
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) rst_sync <= 2'b00;
         else        rst_sync <= {rst_sync[0], 1'b1};

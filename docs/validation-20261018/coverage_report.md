@@ -1,0 +1,56 @@
+# 阶段5验证与覆盖率报告
+
+- 源码摘要 SHA-256：`0488d6ef27f3b492d8945da48f2355df54ff6aa5b32540db42071fcddd22d70c`
+- Icarus 回归：18 次运行全部通过；集成等待配置种子：1,7,23。
+- 验证计划必达 bins：86/86（100.00%）。
+- XSim 原生 covergroup 和代码覆盖率：not_run。
+- 详细日志、JSON 和可用的原生数据库/报告：`build/phase5/`。
+- 功能计划覆盖与代码覆盖分别统计，测试通过不等于覆盖率达到 100%。
+
+| 范围 | 命中 / 必达 | 未覆盖 |
+|---|---:|---|
+| integration | 10/10 | 无 |
+| apb | 4/4 | 无 |
+| arbiter | 2/2 | 无 |
+| fifo | 2/2 | 无 |
+| ahb | 18/18 | 无 |
+| sram | 35/35 | 无 |
+| dma | 10/10 | 无 |
+| fir | 5/5 | 无 |
+
+## 自动代码覆盖：Icarus 可执行过程语句行
+
+| RTL 文件 | 已执行 / 可执行行 | 覆盖率 | 未覆盖行 |
+|---|---:|---:|---|
+| ahb2axi.v | 30/31 | 96.77% | 113 |
+| axi_arbiter.v | 23/23 | 100.00% |  |
+| axi_ic.v | 74/74 | 100.00% |  |
+| axi_sram.v | 65/65 | 100.00% |  |
+| axi_to_apb.v | 124/124 | 100.00% |  |
+| dma.v | 18/20 | 90.00% | 349, 351 |
+| dma_engine.v | 78/78 | 100.00% |  |
+| dma_regs.v | 84/85 | 98.82% | 359 |
+| fir.v | 101/101 | 100.00% |  |
+| fir_core.v | 46/46 | 100.00% |  |
+| sync_fifo.v | 18/18 | 100.00% |  |
+| uart_apb.v | 36/36 | 100.00% |  |
+| uart_rx.v | 46/46 | 100.00% |  |
+| uart_tx.v | 36/36 | 100.00% |  |
+
+合计：779/783（99.49%）。分母由 Icarus 编译器调试指令自动确定，不是人工选取源代码行。
+该指标只统计已展开配置的过程语句行；连续赋值、分支两侧、条件组合和信号翻转不在此指标内。RTL 未插入或改写功能语句，仅去掉编译产物中的 TB 调试指令以降低跟踪量。
+[Icarus 跟踪命令官方说明](https://steveicarus.github.io/iverilog/usage/vvp_debug.html)。
+
+剩余缺口保留在上表，未从分母扣除。AHB/DMA 寄存器状态机的 default 恢复分支需要非法状态注入；DMA 的 ID 契约报错分支需要上游引擎违反契约。当前没有用强制破坏 RTL 状态或 ID 的方式凑覆盖。
+
+## 复现
+
+```powershell
+python sim/phase5.py --line-coverage --native --work-dir C:/Windows/Temp/soc_phase5_new_run --report docs/阶段5-覆盖率报告.md
+```
+
+## 范围与限制
+
+集成测试独立实例化 FIR、DMA、AXI 互连、SRAM 和 UART/APB，未实例化 CPU 或 soc_top。FIR 黄金模型通过文件输入，338 项端到端结果逐项比较；CPU AXI BFM 与 DMA 争用真实互连。
+AHB 的 BUSY/IDLE 不应发起传输；未对齐 AHB 属于非法输入并返回两周期 ERROR；SRAM 的未对齐 AXI 传输则按 AXI 地址对齐规则处理。
+原生通用 covergroup 还包含部分端口不支持的类型和交叉组合；其未命中项保留为诊断信息，不能用计划必达 bins 的比例替代原生覆盖率。未做 CPU 软件覆盖、形式证明、综合或上板。

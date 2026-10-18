@@ -1,0 +1,39 @@
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2026 Advanced Micro Devices, Inc. All Rights Reserved.
+---------------------------------------------------------------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2026.1 (win64) Build 6511674 Tue Jun 16 11:02:23 MDT 2026
+| Date         : Sun Oct 18 10:12:05 2026
+| Host         : LAPTOP-RI0QADEP running 64-bit major release  (build 9200)
+| Command      : report_drc -file route_drc.rpt
+| Design       : soc_top
+| Device       : xc7z020clg400-1
+| Speed File   : -1
+| Design State : Fully Routed
+---------------------------------------------------------------------------------------------------------------------------------------------
+
+Report DRC
+
+Table of Contents
+-----------------
+1. REPORT SUMMARY
+2. REPORT DETAILS
+
+1. REPORT SUMMARY
+-----------------
+            Netlist: soc_top
+          Floorplan: design_1
+      Design limits: <entire design considered>
+           Ruledeck: default
+             Max checks: <unlimited>
+             Checks found: 363
++-----------+------------------+----------------------------+--------+
+| Rule      | Severity         | Description                | Checks |
++-----------+------------------+----------------------------+--------+
+| UCIO-1    | Critical Warning | Unconstrained Logical Port | 1      |
+| CHECK-3   | Warning          | Report rule limit reached  | 1      |
+| DPIP-1    | Warning          | Input pipelining           | 170    |
+| DPOP-1    | Warning          | PREG Output pipelining     | 85     |
+| DPOP-2    | Warning          | MREG Output pipelining     | 85     |
+| REQP-1839 | Warning          | RAMB36 async control check | 20     |
+| ZPS7-1    | Warning          | PS7 block required         | 1      |
++-----------+------------------+----------------------------+--------+
+

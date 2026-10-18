@@ -43,7 +43,7 @@ module uart_rx #(
     localparam S_STOP  = 2'd3;
 
     // ---- 两级同步器 ----
-    reg rxd_meta, rxd_sync;
+    (* ASYNC_REG = "TRUE" *) reg rxd_meta, rxd_sync;
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             rxd_meta <= 1'b1;

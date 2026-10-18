@@ -23,7 +23,7 @@ UNIT_TOPS = ['tb_axi_to_apb','tb_axi_sram','tb_axi_ic','tb_fifo_arbiter',
              'tb_dma_engine','tb_dma_self','tb_dma','tb_dma_ic','tb_fir_core_contract',
              'tb_fir_core','tb_fir','tb_uart_echo','tb_uart_apb_edges']
 REQUIRED = {
-    'integration': ['fir_dma_golden_337','parallel_cpu_dma','dma_4k_split',
+    'integration': ['fir_dma_golden_338','parallel_cpu_dma','dma_4k_split',
                     'six_channels','dma_read_decerr','dma_write_decerr',
                     'zero_length','decode_errors','reset_active_recovery','dma_config_bursts'],
     'apb': ['halfword_strobe','simultaneous_addresses','timeout_all_beats','early_error_drain'],
@@ -179,7 +179,7 @@ def main():
     lines+=['','## 复现','', '```powershell','python sim/phase5.py --line-coverage --native --work-dir C:/Windows/Temp/soc_phase5_new_run --report docs/阶段5-覆盖率报告.md','```','',
             '## 范围与限制','',
             '集成测试独立实例化 FIR、DMA、AXI 互连、SRAM 和 UART/APB，未实例化 CPU 或 soc_top。'
-            'FIR 黄金模型通过文件输入，337 项端到端结果逐项比较；CPU AXI BFM 与 DMA 争用真实互连。',
+            'FIR 黄金模型通过文件输入，338 项端到端结果逐项比较；CPU AXI BFM 与 DMA 争用真实互连。',
             'AHB 的 BUSY/IDLE 不应发起传输；未对齐 AHB 属于非法输入并返回两周期 ERROR；'
             'SRAM 的未对齐 AXI 传输则按 AXI 地址对齐规则处理。',
             '原生通用 covergroup 还包含部分端口不支持的类型和交叉组合；其未命中项保留为诊断信息，'
